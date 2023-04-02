@@ -320,6 +320,8 @@ enum {
   EM_VE = 251,            // NEC SX-Aurora VE
   EM_CSKY = 252,          // C-SKY 32-bit processor
   EM_LOONGARCH = 258,     // LoongArch
+
+  EM_ACCA = 786,          // Acca (temporary and arbitrary ELF ID)
 };
 
 // Object file classes.
@@ -943,6 +945,12 @@ enum : unsigned {
 // ELF Relocation types for Xtensa
 enum {
 #include "ELFRelocs/Xtensa.def"
+};
+
+// ELF Relocation types for Acca
+
+enum {
+#include "ELFRelocs/Acca.def"
 };
 
 #undef ELF_RELOC

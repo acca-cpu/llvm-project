@@ -41,6 +41,7 @@
 #include "Targets/WebAssembly.h"
 #include "Targets/X86.h"
 #include "Targets/XCore.h"
+#include "Targets/Acca.h"
 #include "clang/Basic/Diagnostic.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Triple.h"
@@ -687,6 +688,13 @@ TargetInfo *AllocateTarget(const llvm::Triple &Triple,
       return new LoongArch64TargetInfo(Triple, Opts);
     }
   }
+  case llvm::Triple::acca:
+    switch (os) {
+    case llvm::Triple::Linux:
+      return new LinuxTargetInfo<AccaTargetInfo>(Triple, Opts);
+    default:
+      return new AccaTargetInfo(Triple, Opts);
+    }
 }
 } // namespace targets
 } // namespace clang
