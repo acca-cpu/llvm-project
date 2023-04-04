@@ -53,6 +53,10 @@ namespace llvm {
                                const MachineFunction &MF) const override;
 
     bool useSoftFloat() const override;
+
+  private:
+    SDValue LowerSIGN_EXTEND(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerZERO_EXTEND(SDValue Op, SelectionDAG &DAG) const;
   };
 }
 

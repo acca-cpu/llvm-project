@@ -64,6 +64,18 @@ AccaTargetLowering::AccaTargetLowering(const TargetMachine &TM, const AccaSubtar
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8 , Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1 , Expand);
 
+  setOperationAction(ISD::ANY_EXTEND, MVT::i1 , Custom);
+  setOperationAction(ISD::ANY_EXTEND, MVT::i8 , Custom);
+  setOperationAction(ISD::ANY_EXTEND, MVT::i16, Custom);
+  setOperationAction(ISD::ANY_EXTEND, MVT::i32, Custom);
+  setOperationAction(ISD::ANY_EXTEND, MVT::i64, Custom);
+
+  setOperationAction(ISD::ZERO_EXTEND, MVT::i1 , Custom);
+  setOperationAction(ISD::ZERO_EXTEND, MVT::i8 , Custom);
+  setOperationAction(ISD::ZERO_EXTEND, MVT::i16, Custom);
+  setOperationAction(ISD::ZERO_EXTEND, MVT::i32, Custom);
+  setOperationAction(ISD::ZERO_EXTEND, MVT::i64, Custom);
+
   // Acca has no REM or DIV operations (only combined DIVREM).
   setOperationAction(ISD::UREM, MVT::i8 , Expand);
   setOperationAction(ISD::UREM, MVT::i16, Expand);
@@ -134,6 +146,25 @@ bool AccaTargetLowering::useSoftFloat() const {
 
 SDValue AccaTargetLowering::
 LowerOperation(SDValue Op, SelectionDAG &DAG) const {
+  switch (Op.getOpcode()) {
+    case ISD::SIGN_EXTEND:
+      return LowerSIGN_EXTEND(Op, DAG);
+    case ISD::ZERO_EXTEND:
+    case ISD::ANY_EXTEND:
+      return LowerZERO_EXTEND(Op, DAG);
+
+    default:
+      llvm_unreachable("Invalid/unreachable custom lowering operation");
+  }
+}
+
+SDValue AccaTargetLowering::
+LowerSIGN_EXTEND(SDValue Op, SelectionDAG &DAG) const {
+  llvm_unreachable("unimplemented");
+}
+
+SDValue AccaTargetLowering::
+LowerZERO_EXTEND(SDValue Op, SelectionDAG &DAG) const {
   llvm_unreachable("unimplemented");
 }
 
