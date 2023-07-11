@@ -87,6 +87,10 @@ def simm22 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= -2097152 && Imm < 20971
   let ParserMatchClass = SImm22Operand;
 }
 
+def simm22_symbol : Operand<i64> {
+  let ParserMatchClass = SImm22Operand;
+}
+
 def CondCode : AsmOperandClass {
   let Name = "CondCode";
   let DiagnosticType = "InvalidCondCode";
@@ -256,12 +260,10 @@ class BaseLoadStore1<bits<6> op, string asmname, bit isStore, bits<2> size, Regi
   !if(isStore, (outs), (outs regtype:$Ra)),
   !if(isStore, (ins I64Regs:$Ra, regtype:$Rb), (ins I64Regs:$Rb)),
   !strconcat(asmname, " $Ra, $Rb"),
-  [
-    !if(isStore,
-      (store regtype:$Rb, I64Regs:$Ra),
-      (set regtype:$Ra, (load I64Regs:$Rb))
-    )
-  ]
+  !if(isStore,
+    [(store regtype:$Rb, I64Regs:$Ra)],
+    []
+  )
 > {
   bits<4> Ra;
   bits<4> Rb;
@@ -849,7 +851,7 @@ multiclass NegBswap<bits<6> op, string asmname, SDPatternOperator opnode> {
 }
 
 multiclass JmpCall<bits<6> absop, bits<6> regrelop, bits<6> immrelop, string asmname> {
-  let isBranch = 1, isTerminator = 1, mayLoad = 0, mayStore = 0 in {
+  let isBranch = 1, mayLoad = 0, mayStore = 0 in {
     let isIndirectBranch = 1 in {
       def _abs_nocond : AccaInst<
         (outs),
@@ -920,8 +922,6 @@ multiclass JmpCall<bits<6> absop, bits<6> regrelop, bits<6> immrelop, string asm
     > {
       bits<22> addr;
 
-      let Uses = [CZOS];
-
       let opcode = immrelop;
       let Inst{21-0} = addr;
       let Inst{25-22} = 0b1111;
@@ -949,7 +949,7 @@ multiclass JmpCall<bits<6> absop, bits<6> regrelop, bits<6> immrelop, string asm
 multiclass Cjmp<bits<2> size, RegisterClass regtype/*, string asmsuffix*/> {
   // FIXME: can't place asmsuffix after `$cond`; it's interpretted as part of the operand name (e.g. `$cond.b`)
 
-  let isBranch = 1, isTerminator = 1 in {
+  let isBranch = 1 in {
     let isIndirectBranch = 1 in {
       def _abs : AccaInst<
         (outs),
@@ -1018,4 +1018,11 @@ class NoOperands<bits<6> op, string asmname, list<dag> pattern> : AccaInst<
   pattern
 > {
   let opcode = op;
+}
+
+// Pseudo instructions
+class Pseudo<dag outs, dag ins, list<dag> pattern = [], string asmstr = "">
+    : AccaInst<outs, ins, asmstr, pattern> {
+  let isPseudo = 1;
+  let isCodeGenOnly = 1;
 }

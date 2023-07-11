@@ -26,6 +26,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAccaTarget() {
   RegisterTargetMachine<AccaTargetMachine> X(getTheAccaTarget());
 
   PassRegistry &PR = *PassRegistry::getPassRegistry();
+  initializeAccaPreRAExpandPseudoPass(PR);
   initializeAccaDAGToDAGISelPass(PR);
 }
 
@@ -97,6 +98,7 @@ public:
   void addIRPasses() override;
   bool addInstSelector() override;
   void addPreEmitPass() override;
+  void addPreRegAlloc() override;
 };
 } // namespace
 
@@ -126,3 +128,7 @@ createMachineFunctionInfo(BumpPtrAllocator &Allocator, const Function &F,
   return AccaMachineFunctionInfo::create<AccaMachineFunctionInfo>(Allocator,
                                                                     F, STI);
 };
+
+void AccaPassConfig::addPreRegAlloc() {
+  addPass(createAccaPreRAExpandPseudoPass());
+}

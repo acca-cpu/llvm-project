@@ -12,6 +12,7 @@ tablegen(LLVM AccaGenMCCodeEmitter.inc -gen-emitter)
 tablegen(LLVM AccaGenMCPseudoLowering.inc -gen-pseudo-lowering)
 tablegen(LLVM AccaGenRegisterInfo.inc -gen-register-info)
 tablegen(LLVM AccaGenSubtargetInfo.inc -gen-subtarget)
+tablegen(LLVM AccaGenSystemOperands.inc -gen-searchable-tables)
 
 add_public_tablegen_target(AccaCommonTableGen)
 
@@ -27,6 +28,8 @@ add_llvm_target(AccaCodeGen
   AccaTargetMachine.cpp
   AccaMCInstLower.cpp
   AccaTargetObjectFile.cpp
+  AccaBaseInfo.cpp
+  AccaExpandPseudoInsts.cpp
 
   LINK_COMPONENTS
   AsmPrinter

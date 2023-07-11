@@ -36,3 +36,9 @@ def : Proc<"generic", []>;
 def Acca : Target {
   let InstructionSet = AccaInstrInfo;
 }
+
+//===----------------------------------------------------------------------===//
+// Named operands for LDM/STM
+//===----------------------------------------------------------------------===//
+
+include "AccaSystemOperands.td"

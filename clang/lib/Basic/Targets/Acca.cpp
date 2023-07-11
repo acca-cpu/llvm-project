@@ -46,15 +46,15 @@ const TargetInfo::AddlRegName AddlRegNames[] = {
 };
 
 ArrayRef<const char *> AccaTargetInfo::getGCCRegNames() const {
-  return llvm::makeArrayRef(GCCRegNames);
+  return llvm::ArrayRef(GCCRegNames);
 }
 
 ArrayRef<TargetInfo::GCCRegAlias> AccaTargetInfo::getGCCRegAliases() const {
-  return llvm::makeArrayRef(GCCRegAliases);
+  return llvm::ArrayRef(GCCRegAliases);
 }
 
 ArrayRef<TargetInfo::AddlRegName> AccaTargetInfo::getGCCAddlRegNames() const {
-  return llvm::makeArrayRef(AddlRegNames);
+  return llvm::ArrayRef(AddlRegNames);
 }
 
 void AccaTargetInfo::getTargetDefines(const LangOptions &Opts, MacroBuilder &Builder) const {

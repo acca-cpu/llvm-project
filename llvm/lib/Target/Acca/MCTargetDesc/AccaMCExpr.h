@@ -21,7 +21,14 @@ namespace llvm {
 class AccaMCExpr : public MCTargetExpr {
 public:
   enum VariantKind {
-    VK_ABS = 0x001,
+    VK_NONE,
+    VK_ABS,
+    VK_CALL,
+    VK_CALL_PLT,
+    VK_REL64_D0,
+    VK_REL64_D1,
+    VK_REL64_D2,
+    VK_REL64_D3,
     VK_INVALID = 0xfff,
   };
 private:

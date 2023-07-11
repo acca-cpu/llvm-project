@@ -687,7 +687,6 @@ TargetInfo *AllocateTarget(const llvm::Triple &Triple,
     default:
       return new LoongArch64TargetInfo(Triple, Opts);
     }
-  }
   case llvm::Triple::acca:
     switch (os) {
     case llvm::Triple::Linux:
@@ -695,6 +694,7 @@ TargetInfo *AllocateTarget(const llvm::Triple &Triple,
     default:
       return new AccaTargetInfo(Triple, Opts);
     }
+  }
 }
 } // namespace targets
 } // namespace clang

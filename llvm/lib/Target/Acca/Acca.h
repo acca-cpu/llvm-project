@@ -27,8 +27,10 @@ class PassRegistry;
 class AccaTargetMachine;
 
 FunctionPass *createAccaISelDag(AccaTargetMachine &TM);
+FunctionPass *createAccaPreRAExpandPseudoPass();
 
 void initializeAccaDAGToDAGISelPass(PassRegistry &);
+void initializeAccaPreRAExpandPseudoPass(PassRegistry &);
 } // namespace llvm
 
 #endif

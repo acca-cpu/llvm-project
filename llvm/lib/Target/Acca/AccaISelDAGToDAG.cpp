@@ -10,13 +10,17 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "AccaBaseInfo.h"
 #include "AccaTargetMachine.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
+#include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cstdint>
 using namespace llvm;
 
 #define DEBUG_TYPE "acca-isel"
@@ -57,12 +61,49 @@ char AccaDAGToDAGISel::ID = 0;
 
 INITIALIZE_PASS(AccaDAGToDAGISel, DEBUG_TYPE, PASS_NAME, false, false)
 
-void AccaDAGToDAGISel::Select(SDNode *N) {
-  SelectCode(N);
+void AccaDAGToDAGISel::Select(SDNode *Node) {
+  // If we have a custom node, we have already selected.
+  if (Node->isMachineOpcode()) {
+    Node->setNodeId(-1);
+    return;
+  }
+
+  // Instruction Selection not handled by the auto-generated tablegen selection
+  // should be handled here.
+  unsigned Opcode = Node->getOpcode();
+
+  switch (Opcode) {
+  default:
+    break;
+  case ISD::FrameIndex: {
+    // select it to `add FI, 0, 0`, which will be lowered to `add rsp, imm, shift` later
+    int FI = cast<FrameIndexSDNode>(Node)->getIndex();
+    const TargetLowering *TLI = getTargetLowering();
+    SDValue TFI = CurDAG->getTargetFrameIndex(FI, TLI->getPointerTy(CurDAG->getDataLayout()));
+    SDLoc DL(Node);
+    CurDAG->SelectNodeTo(Node, Acca::ADD_word_nonnull_imm_nocarry_nosetflags_arith, MVT::i64, TFI, CurDAG->getTargetConstant(0, DL, MVT::i32), CurDAG->getTargetConstant(0, DL, MVT::i32));
+    return;
+  }
+  }
+
+  SelectCode(Node);
 };
 
 bool AccaDAGToDAGISel::SelectShiftedImm(SDValue N, SDValue &Base, SDValue &Shift) {
-  llvm_unreachable("unimplemented");
+  if (!isa<ConstantSDNode>(N.getNode()))
+    return false;
+
+  uint64_t Value = cast<ConstantSDNode>(N.getNode())->getZExtValue();
+  uint16_t Imm;
+  uint8_t ShiftFactorImm;
+
+  if (!AccaUtil::asUnsignedShiftedImm11(Value, Imm, ShiftFactorImm))
+    return false;
+
+  SDLoc DL(N);
+  Base = CurDAG->getTargetConstant(Imm, DL, MVT::i16);
+  Shift = CurDAG->getTargetConstant(ShiftFactorImm, DL, MVT::i4);
+  return true;
 };
 
 /// createAccaISelDag - This pass converts a legalized DAG into a

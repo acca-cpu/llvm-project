@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "AccaMCInstLower.h"
+#include "AccaBaseInfo.h"
 #include "MCTargetDesc/AccaMCExpr.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
@@ -47,15 +48,43 @@ MCOperand AccaMCInstLower::lowerSymbolOperandELF(const MachineOperand &MO,
                                                     MCSymbol *Sym) const {
   uint32_t RefFlags = 0;
 
+  AccaMCExpr::VariantKind Kind;
+
+  switch (MO.getTargetFlags()) {
+  default:
+    llvm_unreachable("Unknown target flag on GV operand");
+  case AccaII::MO_None:
+    Kind = AccaMCExpr::VK_NONE;
+    break;
+  case AccaII::MO_CALL:
+    Kind = AccaMCExpr::VK_CALL;
+    break;
+  case AccaII::MO_CALL_PLT:
+    Kind = AccaMCExpr::VK_CALL_PLT;
+    break;
+  case AccaII::MO_REL64_D0:
+    Kind = AccaMCExpr::VK_REL64_D0;
+    break;
+  case AccaII::MO_REL64_D1:
+    Kind = AccaMCExpr::VK_REL64_D1;
+    break;
+  case AccaII::MO_REL64_D2:
+    Kind = AccaMCExpr::VK_REL64_D2;
+    break;
+  case AccaII::MO_REL64_D3:
+    Kind = AccaMCExpr::VK_REL64_D3;
+    break;
+    // TODO: Handle more target-flags.
+  }
+
   const MCExpr *Expr =
       MCSymbolRefExpr::create(Sym, MCSymbolRefExpr::VK_None, Ctx);
   if (!MO.isJTI() && MO.getOffset())
     Expr = MCBinaryExpr::createAdd(
         Expr, MCConstantExpr::create(MO.getOffset(), Ctx), Ctx);
 
-  AccaMCExpr::VariantKind RefKind;
-  RefKind = static_cast<AccaMCExpr::VariantKind>(RefFlags);
-  Expr = AccaMCExpr::create(Expr, RefKind, Ctx);
+  if (Kind != AccaMCExpr::VK_NONE)
+    Expr = AccaMCExpr::create(Expr, Kind, Ctx);
 
   return MCOperand::createExpr(Expr);
 }

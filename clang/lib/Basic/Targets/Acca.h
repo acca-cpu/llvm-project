@@ -33,20 +33,16 @@ public:
     // * 64-bit aligned 64-bit integers (and all other integers are naturally aligned as well)
     // * Mach-O symbol mangling
     // * CPU supports 8-, 16-, 32-, and 64-bit arithmetic efficiently
-    resetDataLayout("e-S128-p:64:64-i64:64-m:o-n:8:16:32:64");
+    resetDataLayout("e-S128-p:64:64-i64:64-m:o-n8:16:32:64");
     SuitableAlign = 128;
-    SizeType = UnsignedLong;
-    IntMaxType = UnsignedLong;
-    PtrDiffType = SignedLong;
-    IntPtrType = SignedLong;
-    WCharType = SignedInt;
-    WIntType = UnsignedInt;
-    Char16Type = SignedShort;
-    Char32Type = SignedInt;
-    Int64Type = SignedLong;
-    Int16Type = SignedShort;
     SigAtomicType = UnsignedChar;
-    ProcessIDType = SignedInt;
+    PointerWidth = 64;
+    PointerAlign = 64;
+    TLSSupported = false;
+    VLASupported = false;
+    HasLongDouble = false;
+    LongWidth = 64;
+    LongAlign = 64;
   }
 
   void getTargetDefines(const LangOptions &Opts, MacroBuilder &Builder) const override;
@@ -62,7 +58,7 @@ public:
   }
 
   ArrayRef<Builtin::Info> getTargetBuiltins() const override {
-    return None;
+    return std::nullopt;
   }
 
   bool validateAsmConstraint(const char *&Name, TargetInfo::ConstraintInfo &info) const override {

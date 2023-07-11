@@ -31,15 +31,26 @@ const AccaMCExpr *AccaMCExpr::create(const MCExpr *Expr, VariantKind Kind,
 
 StringRef AccaMCExpr::getVariantKindName() const {
   switch (static_cast<uint32_t>(getKind())) {
-  case VK_ABS:                return "";
+  case VK_CALL_PLT: return "plt";
+  case VK_REL64_D0: return "rel64_d0";
+  case VK_REL64_D1: return "rel64_d1";
+  case VK_REL64_D2: return "rel64_d2";
+  case VK_REL64_D3: return "rel64_d3";
   default:
     llvm_unreachable("Invalid ELF symbol kind");
   }
 }
 
 void AccaMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
-  OS << getVariantKindName();
+  VariantKind Kind = getKind();
+  bool HasVariant =
+      ((Kind != VK_NONE) && (Kind != VK_CALL));
+
+  if (HasVariant)
+    OS << '%' << getVariantKindName() << '(';
   Expr->print(OS, MAI);
+  if (HasVariant)
+    OS << ')';
 }
 
 void AccaMCExpr::visitUsedExpr(MCStreamer &Streamer) const {
@@ -59,7 +70,7 @@ bool AccaMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
   Res =
       MCValue::get(Res.getSymA(), Res.getSymB(), Res.getConstant(), getKind());
 
-  return true;
+  return Res.getSymB() ? getKind() == VK_NONE : true;
 }
 
 void AccaMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {

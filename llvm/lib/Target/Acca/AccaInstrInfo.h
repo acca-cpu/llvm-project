@@ -80,6 +80,10 @@ public:
 
   bool
   reverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const override;
+
+  void movImm(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
+              const DebugLoc &DL, Register DstReg, uint64_t Val,
+              MachineInstr::MIFlag Flag = MachineInstr::NoFlags) const;
 };
 
 }

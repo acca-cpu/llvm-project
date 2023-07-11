@@ -40,6 +40,8 @@ struct AccaRegisterInfo : public AccaGenRegisterInfo {
 
   bool canRealignStack(const MachineFunction &MF) const override;
 
+  bool requiresRegisterScavenging(const MachineFunction &MF) const override;
+
 };
 
 } // end namespace llvm

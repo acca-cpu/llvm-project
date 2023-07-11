@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "AccaBaseInfo.h"
 #include "AccaCallingConvention.h"
 #include "AccaISelLowering.h"
 //#include "MCTargetDesc/AccaMCExpr.h"
@@ -21,6 +22,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/CodeGen/CallingConvLower.h"
+#include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -63,12 +65,6 @@ AccaTargetLowering::AccaTargetLowering(const TargetMachine &TM, const AccaSubtar
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8 , Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1 , Expand);
-
-  setOperationAction(ISD::ANY_EXTEND, MVT::i1 , Custom);
-  setOperationAction(ISD::ANY_EXTEND, MVT::i8 , Custom);
-  setOperationAction(ISD::ANY_EXTEND, MVT::i16, Custom);
-  setOperationAction(ISD::ANY_EXTEND, MVT::i32, Custom);
-  setOperationAction(ISD::ANY_EXTEND, MVT::i64, Custom);
 
   setOperationAction(ISD::ZERO_EXTEND, MVT::i1 , Custom);
   setOperationAction(ISD::ZERO_EXTEND, MVT::i8 , Custom);
@@ -236,9 +232,292 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
   return Chain;
 };
 
+static Align getPrefTypeAlign(EVT VT, SelectionDAG &DAG) {
+  return DAG.getDataLayout().getPrefTypeAlign(
+      VT.getTypeForEVT(*DAG.getContext()));
+}
+
+static SDValue convertValVTToLocVT(SelectionDAG &DAG, SDValue Val,
+                                   const CCValAssign &VA, const SDLoc &DL,
+                                   const AccaSubtarget &Subtarget) {
+  EVT LocVT = VA.getLocVT();
+
+  switch (VA.getLocInfo()) {
+  default:
+    llvm_unreachable("Unexpected CCValAssign::LocInfo");
+  case CCValAssign::Full:
+    if (VA.getValVT().isFixedLengthVector() && LocVT.isScalableVector())
+      llvm_unreachable("Acca doesn't support vectors");
+    break;
+  case CCValAssign::AExt:
+    Val = DAG.getNode(ISD::ANY_EXTEND, DL, LocVT, Val);
+    break;
+  case CCValAssign::BCvt:
+    Val = DAG.getNode(ISD::BITCAST, DL, LocVT, Val);
+    break;
+  }
+  return Val;
+}
+
+// Convert Val to a ValVT. Should not be called for CCValAssign::Indirect
+// values.
+static SDValue convertLocVTToValVT(SelectionDAG &DAG, SDValue Val,
+                                   const CCValAssign &VA, const SDLoc &DL,
+                                   const AccaSubtarget &Subtarget) {
+  switch (VA.getLocInfo()) {
+  default:
+    llvm_unreachable("Unexpected CCValAssign::LocInfo");
+  case CCValAssign::Full:
+    if (VA.getValVT().isFixedLengthVector() && VA.getLocVT().isScalableVector())
+      llvm_unreachable("Acca doesn't support vectors");
+    break;
+  case CCValAssign::AExt:
+    Val = DAG.getNode(ISD::TRUNCATE, DL, VA.getValVT(), Val);
+    break;
+  case CCValAssign::Trunc:
+    Val = DAG.getNode(ISD::ANY_EXTEND, DL, VA.getValVT(), Val);
+    break;
+  case CCValAssign::BCvt:
+    Val = DAG.getNode(ISD::BITCAST, DL, VA.getValVT(), Val);
+    break;
+  }
+  return Val;
+}
+
+// Lower a call to a callseq_start + CALL + callseq_end chain, and add input
+// and output parameter nodes.
 SDValue AccaTargetLowering::
 LowerCall(CallLoweringInfo &CLI, SmallVectorImpl<SDValue> &InVals) const {
-  llvm_unreachable("unimplemented");
+  SelectionDAG &DAG = CLI.DAG;
+  SDLoc &DL = CLI.DL;
+  SmallVectorImpl<ISD::OutputArg> &Outs = CLI.Outs;
+  SmallVectorImpl<SDValue> &OutVals = CLI.OutVals;
+  SmallVectorImpl<ISD::InputArg> &Ins = CLI.Ins;
+  SDValue Chain = CLI.Chain;
+  SDValue Callee = CLI.Callee;
+  CallingConv::ID CallConv = CLI.CallConv;
+  bool IsVarArg = CLI.IsVarArg;
+  EVT PtrVT = getPointerTy(DAG.getDataLayout());
+  bool &IsTailCall = CLI.IsTailCall;
+  MVT GRLenVT = MVT::i64;
+
+  MachineFunction &MF = DAG.getMachineFunction();
+
+  // Analyze the operands of the call, assigning locations to each operand.
+  SmallVector<CCValAssign> ArgLocs;
+  CCState ArgCCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
+
+  ArgCCInfo.AnalyzeCallOperands(Outs, CC_Acca);
+
+  // Check if it's really possible to do a tail call.
+  // TODO: for now, just don't do tail calls.
+  if (IsTailCall)
+    IsTailCall = false;
+
+  if (IsTailCall)
+    (void)0;
+  else if (CLI.CB && CLI.CB->isMustTailCall())
+    report_fatal_error("failed to perform tail call elimination on a call "
+                       "site marked musttail");
+
+  // Get a count of how many bytes are to be pushed on the stack.
+  unsigned NumBytes = ArgCCInfo.getNextStackOffset();
+
+  // Create local copies for byval args.
+  SmallVector<SDValue> ByValArgs;
+  for (unsigned i = 0, e = Outs.size(); i != e; ++i) {
+    ISD::ArgFlagsTy Flags = Outs[i].Flags;
+    if (!Flags.isByVal())
+      continue;
+
+    SDValue Arg = OutVals[i];
+    unsigned Size = Flags.getByValSize();
+    Align Alignment = Flags.getNonZeroByValAlign();
+
+    int FI =
+        MF.getFrameInfo().CreateStackObject(Size, Alignment, /*isSS=*/false);
+    SDValue FIPtr = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+    SDValue SizeNode = DAG.getConstant(Size, DL, GRLenVT);
+
+    Chain = DAG.getMemcpy(Chain, DL, FIPtr, Arg, SizeNode, Alignment,
+                          /*IsVolatile=*/false,
+                          /*AlwaysInline=*/false, /*isTailCall=*/IsTailCall,
+                          MachinePointerInfo(), MachinePointerInfo());
+    ByValArgs.push_back(FIPtr);
+  }
+
+  if (!IsTailCall)
+    Chain = DAG.getCALLSEQ_START(Chain, NumBytes, 0, CLI.DL);
+
+  // Copy argument values to their designated locations.
+  SmallVector<std::pair<Register, SDValue>> RegsToPass;
+  SmallVector<SDValue> MemOpChains;
+  SDValue StackPtr;
+  for (unsigned i = 0, j = 0, e = ArgLocs.size(); i != e; ++i) {
+    CCValAssign &VA = ArgLocs[i];
+    SDValue ArgValue = OutVals[i];
+    ISD::ArgFlagsTy Flags = Outs[i].Flags;
+
+    // Promote the value if needed.
+    // For now, only handle fully promoted and indirect arguments.
+    if (VA.getLocInfo() == CCValAssign::Indirect) {
+      // Store the argument in a stack slot and pass its address.
+      Align StackAlign =
+          std::max(getPrefTypeAlign(Outs[i].ArgVT, DAG),
+                   getPrefTypeAlign(ArgValue.getValueType(), DAG));
+      TypeSize StoredSize = ArgValue.getValueType().getStoreSize();
+      // If the original argument was split and passed by reference, we need to
+      // store the required parts of it here (and pass just one address).
+      unsigned ArgIndex = Outs[i].OrigArgIndex;
+      unsigned ArgPartOffset = Outs[i].PartOffset;
+      assert(ArgPartOffset == 0);
+      // Calculate the total size to store. We don't have access to what we're
+      // actually storing other than performing the loop and collecting the
+      // info.
+      SmallVector<std::pair<SDValue, SDValue>> Parts;
+      while (i + 1 != e && Outs[i + 1].OrigArgIndex == ArgIndex) {
+        SDValue PartValue = OutVals[i + 1];
+        unsigned PartOffset = Outs[i + 1].PartOffset - ArgPartOffset;
+        SDValue Offset = DAG.getIntPtrConstant(PartOffset, DL);
+        EVT PartVT = PartValue.getValueType();
+
+        StoredSize += PartVT.getStoreSize();
+        StackAlign = std::max(StackAlign, getPrefTypeAlign(PartVT, DAG));
+        Parts.push_back(std::make_pair(PartValue, Offset));
+        ++i;
+      }
+      SDValue SpillSlot = DAG.CreateStackTemporary(StoredSize, StackAlign);
+      int FI = cast<FrameIndexSDNode>(SpillSlot)->getIndex();
+      MemOpChains.push_back(
+          DAG.getStore(Chain, DL, ArgValue, SpillSlot,
+                       MachinePointerInfo::getFixedStack(MF, FI)));
+      for (const auto &Part : Parts) {
+        SDValue PartValue = Part.first;
+        SDValue PartOffset = Part.second;
+        SDValue Address =
+            DAG.getNode(ISD::ADD, DL, PtrVT, SpillSlot, PartOffset);
+        MemOpChains.push_back(
+            DAG.getStore(Chain, DL, PartValue, Address,
+                         MachinePointerInfo::getFixedStack(MF, FI)));
+      }
+      ArgValue = SpillSlot;
+    } else {
+      ArgValue = convertValVTToLocVT(DAG, ArgValue, VA, DL, *Subtarget);
+    }
+
+    // Use local copy if it is a byval arg.
+    if (Flags.isByVal())
+      ArgValue = ByValArgs[j++];
+
+    if (VA.isRegLoc()) {
+      // Queue up the argument copies and emit them at the end.
+      RegsToPass.push_back(std::make_pair(VA.getLocReg(), ArgValue));
+    } else {
+      assert(VA.isMemLoc() && "Argument not register or memory");
+      assert(!IsTailCall && "Tail call not allowed if stack is used "
+                            "for passing parameters");
+
+      // Work out the address of the stack slot.
+      if (!StackPtr.getNode())
+        StackPtr = DAG.getCopyFromReg(Chain, DL, Acca::R13, PtrVT);
+      SDValue Address =
+          DAG.getNode(ISD::ADD, DL, PtrVT, StackPtr,
+                      DAG.getIntPtrConstant(VA.getLocMemOffset(), DL));
+
+      // Emit the store.
+      MemOpChains.push_back(
+          DAG.getStore(Chain, DL, ArgValue, Address, MachinePointerInfo()));
+    }
+  }
+
+  // Join the stores, which are independent of one another.
+  if (!MemOpChains.empty())
+    Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other, MemOpChains);
+
+  SDValue Glue;
+
+  // Build a sequence of copy-to-reg nodes, chained and glued together.
+  for (auto &Reg : RegsToPass) {
+    Chain = DAG.getCopyToReg(Chain, DL, Reg.first, Reg.second, Glue);
+    Glue = Chain.getValue(1);
+  }
+
+  // If the callee is a GlobalAddress/ExternalSymbol node, turn it into a
+  // TargetGlobalAddress/TargetExternalSymbol node so that legalize won't
+  // split it and then direct call can be matched by PseudoCALL.
+  if (GlobalAddressSDNode *S = dyn_cast<GlobalAddressSDNode>(Callee)) {
+    const GlobalValue *GV = S->getGlobal();
+    unsigned OpFlags =
+        getTargetMachine().shouldAssumeDSOLocal(*GV->getParent(), GV)
+            ? AccaII::MO_CALL
+            : AccaII::MO_CALL_PLT;
+    Callee = DAG.getTargetGlobalAddress(S->getGlobal(), DL, PtrVT, 0, OpFlags);
+  } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
+    unsigned OpFlags = getTargetMachine().shouldAssumeDSOLocal(
+                           *MF.getFunction().getParent(), nullptr)
+                           ? AccaII::MO_CALL
+                           : AccaII::MO_CALL_PLT;
+    Callee = DAG.getTargetExternalSymbol(S->getSymbol(), PtrVT, OpFlags);
+  }
+
+  // The first call operand is the chain and the second is the target address.
+  SmallVector<SDValue> Ops;
+  Ops.push_back(Chain);
+  Ops.push_back(Callee);
+
+  // Add argument registers to the end of the list so that they are
+  // known live into the call.
+  for (auto &Reg : RegsToPass)
+    Ops.push_back(DAG.getRegister(Reg.first, Reg.second.getValueType()));
+
+  if (!IsTailCall) {
+    // Add a register mask operand representing the call-preserved registers.
+    const TargetRegisterInfo *TRI = Subtarget->getRegisterInfo();
+    const uint32_t *Mask = TRI->getCallPreservedMask(MF, CallConv);
+    assert(Mask && "Missing call preserved mask for calling convention");
+    Ops.push_back(DAG.getRegisterMask(Mask));
+  }
+
+  // Glue the call to the argument copies, if any.
+  if (Glue.getNode())
+    Ops.push_back(Glue);
+
+  // Emit the call.
+  SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
+
+  if (IsTailCall) {
+    MF.getFrameInfo().setHasTailCall();
+    return DAG.getNode(AccaISD::TAIL, DL, NodeTys, Ops);
+  }
+
+  Chain = DAG.getNode(AccaISD::CALL, DL, NodeTys, Ops);
+  DAG.addNoMergeSiteInfo(Chain.getNode(), CLI.NoMerge);
+  Glue = Chain.getValue(1);
+
+  // Mark the end of the call, which is glued to the call itself.
+  Chain = DAG.getCALLSEQ_END(Chain, NumBytes, 0, Glue, DL);
+  Glue = Chain.getValue(1);
+
+  // Assign locations to each value returned by this call.
+  SmallVector<CCValAssign> RVLocs;
+  CCState RetCCInfo(CallConv, IsVarArg, MF, RVLocs, *DAG.getContext());
+  RetCCInfo.AnalyzeCallResult(Ins, CC_Acca);
+
+  // Copy all of the result registers out of their specified physreg.
+  for (auto &VA : RVLocs) {
+    // Copy the value out.
+    SDValue RetValue =
+        DAG.getCopyFromReg(Chain, DL, VA.getLocReg(), VA.getLocVT(), Glue);
+    // Glue the RetValue to the end of the call sequence.
+    Chain = RetValue.getValue(1);
+    Glue = RetValue.getValue(2);
+
+    RetValue = convertLocVTToValVT(DAG, RetValue, VA, DL, *Subtarget);
+
+    InVals.push_back(RetValue);
+  }
+
+  return Chain;
 };
 
 SDValue AccaTargetLowering::

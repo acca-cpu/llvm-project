@@ -13,7 +13,9 @@
 #include "AccaInstrInfo.h"
 #include "Acca.h"
 #include "AccaMachineFunctionInfo.h"
+#include "AccaRegisterInfo.h"
 #include "AccaSubtarget.h"
+#include "MCTargetDesc/AccaMCTargetDesc.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
@@ -22,6 +24,7 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "AccaBaseInfo.h"
 
 using namespace llvm;
 
@@ -32,7 +35,7 @@ using namespace llvm;
 void AccaInstrInfo::anchor() {}
 
 AccaInstrInfo::AccaInstrInfo()
-    : AccaGenInstrInfo(), RI() {}
+    : AccaGenInstrInfo(Acca::ADJCALLSTACKDOWN, Acca::ADJCALLSTACKUP), RI() {}
 
 bool AccaInstrInfo::isBranchOffsetInRange(unsigned BranchOpc,
                                           int64_t BrOffset) const {
@@ -168,17 +171,86 @@ void AccaInstrInfo::
 copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
             const DebugLoc &DL, MCRegister DestReg, MCRegister SrcReg,
             bool KillSrc) const {
-  llvm_unreachable("unimplemented");
+  if (Acca::CCRRegClass.contains(DestReg) &&
+      Acca::CCRRegClass.contains(SrcReg)) {
+    llvm_unreachable("Unexpected CCR register copy");
+  }
+
+  {
+    unsigned Opcode = Acca::INSTRUCTION_LIST_END;
+
+    if (Acca::I8RegsRegClass.contains(DestReg) &&
+        Acca::I8RegsRegClass.contains(SrcReg)) {
+      Opcode = Acca::COPY_byte;
+    }
+
+    if (Acca::I16RegsRegClass.contains(DestReg) &&
+        Acca::I16RegsRegClass.contains(SrcReg)) {
+      Opcode = Acca::COPY_doublebyte;
+    }
+
+    if (Acca::I32RegsRegClass.contains(DestReg) &&
+        Acca::I32RegsRegClass.contains(SrcReg)) {
+      Opcode = Acca::COPY_quadbyte;
+    }
+
+    if (Acca::I64RegsRegClass.contains(DestReg) &&
+        Acca::I64RegsRegClass.contains(SrcReg)) {
+      Opcode = Acca::COPY_word;
+    }
+
+    if (Opcode != Acca::INSTRUCTION_LIST_END) {
+      BuildMI(MBB, I, DL, get(Opcode), DestReg)
+        .addReg(SrcReg, getKillRegState(KillSrc));
+      return;
+    }
+  }
+
+  if (Acca::CCRRegClass.contains(DestReg)) {
+    assert(Acca::I64RegsRegClass.contains(SrcReg) &&
+           "CCR register update must have 64-bit source register");
+
+    llvm_unreachable("TODO: allow register-to-flags copy");
+  }
+
+  if (Acca::CCRRegClass.contains(SrcReg)) {
+    assert(Acca::I64RegsRegClass.contains(DestReg) &&
+           "CCR register update must have 64-bit source register");
+
+    BuildMI(MBB, I, DL, get(Acca::LDM), DestReg)
+      .addImm(AccaSysReg::flags);
+
+    BuildMI(MBB, I, DL, get(Acca::AND_word_nonnull_imm_nosetflags), DestReg)
+      .addReg(DestReg)
+      .addImm(0xf) // the CZOS bits are bits 0-3
+      .addImm(0);
+  }
+
+  llvm_unreachable("Invalid register copy");
 };
 
 void AccaInstrInfo::
 storeRegToStackSlot(MachineBasicBlock &MBB,
                     MachineBasicBlock::iterator MBBI, Register SrcReg,
-                    bool isKill, int FrameIndex,
+                    bool IsKill, int FrameIndex,
                     const TargetRegisterClass *RC,
                     const TargetRegisterInfo *TRI,
                     Register VReg) const {
-  llvm_unreachable("unimplemented");
+  DebugLoc DL;
+  if (MBBI != MBB.end())
+    DL = MBBI->getDebugLoc();
+  MachineFunction *MF = MBB.getParent();
+  MachineFrameInfo &MFI = MF->getFrameInfo();
+
+  MachineMemOperand *MMO = MF->getMachineMemOperand(
+    MachinePointerInfo::getFixedStack(*MF, FrameIndex),
+    MachineMemOperand::MOStore, MFI.getObjectSize(FrameIndex),
+    MFI.getObjectAlign(FrameIndex));
+
+  BuildMI(MBB, MBBI, DL, get(Acca::STS_word))
+    .addMemOperand(MMO)
+    .addFrameIndex(FrameIndex)
+    .addReg(SrcReg, getKillRegState(IsKill));
 };
 
 void AccaInstrInfo::
@@ -187,7 +259,20 @@ loadRegFromStackSlot(MachineBasicBlock &MBB,
                      int FrameIndex, const TargetRegisterClass *RC,
                      const TargetRegisterInfo *TRI,
                      Register VReg) const {
-  llvm_unreachable("unimplemented");
+  DebugLoc DL;
+  if (MBBI != MBB.end())
+    DL = MBBI->getDebugLoc();
+  MachineFunction *MF = MBB.getParent();
+  MachineFrameInfo &MFI = MF->getFrameInfo();
+
+  MachineMemOperand *MMO = MF->getMachineMemOperand(
+      MachinePointerInfo::getFixedStack(*MF, FrameIndex),
+      MachineMemOperand::MOLoad, MFI.getObjectSize(FrameIndex),
+      MFI.getObjectAlign(FrameIndex));
+
+  BuildMI(MBB, MBBI, DL, get(Acca::LDS_word), DestReg)
+    .addFrameIndex(FrameIndex)
+    .addMemOperand(MMO);
 };
 
 unsigned AccaInstrInfo::
@@ -203,4 +288,48 @@ isStoreToStackSlot(const MachineInstr &MI, int &FrameIndex) const {
 bool AccaInstrInfo::
 reverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const {
   llvm_unreachable("unimplemented");
+};
+
+void AccaInstrInfo::movImm(MachineBasicBlock &MBB,
+                           MachineBasicBlock::iterator MBBI,
+                           const DebugLoc &DL, Register DstReg,
+                           uint64_t Val, MachineInstr::MIFlag Flag) const {
+  // TODO: optimize this better according to the value. for now, we just build
+  //       a bunch of LDIs shifted by 16 bits each time. however, LDI also
+  //       accepts arbitrary shifts to load 16-bits anywhere, so we can check
+  //       if the value would fit into 16 bits shifted and use that instead.
+
+  BuildMI(MBB, MBBI, DL, get(Acca::LDI_noshift_clearall), DstReg)
+    .addImm(Val & 0xffff)
+    .setMIFlag(Flag);
+
+  if (isUInt<16>(Val)) {
+    return;
+  }
+
+  BuildMI(MBB, MBBI, DL, get(Acca::LDI), DstReg)
+    .addImm((Val >> 16) & 0xffff)
+    .addImm(16)
+    .addImm(0)
+    .setMIFlag(Flag);
+
+  if (isUInt<32>(Val)) {
+    return;
+  }
+
+  BuildMI(MBB, MBBI, DL, get(Acca::LDI), DstReg)
+    .addImm((Val >> 32) & 0xffff)
+    .addImm(32)
+    .addImm(0)
+    .setMIFlag(Flag);
+
+  if (isUInt<48>(Val)) {
+    return;
+  }
+
+  BuildMI(MBB, MBBI, DL, get(Acca::LDI), DstReg)
+    .addImm((Val >> 48) & 0xffff)
+    .addImm(48)
+    .addImm(0)
+    .setMIFlag(Flag);
 };
