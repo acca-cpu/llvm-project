@@ -44,6 +44,7 @@ def UImm2Operand : UImm<2>;
 def UImm3Operand : UImm<3>;
 def UImm6Operand : UImm<6>;
 def UImm7Operand : UImm<7>;
+def UImm10Operand : UImm<10>;
 def UImm11Operand : UImm<11>;
 def UImm16Operand : UImm<16>;
 def UImm22Operand : UImm<22>;
@@ -67,6 +68,10 @@ def uimm7 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= 0 && Imm < 128; }]> {
   let ParserMatchClass = UImm7Operand;
 }
 
+def uimm10 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= 0 && Imm < 1024; }]> {
+  let ParserMatchClass = UImm10Operand;
+}
+
 def uimm11 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= 0 && Imm < 2048; }]> {
   let ParserMatchClass = UImm11Operand;
 }
@@ -83,7 +88,15 @@ def simm13 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= -4096 && Imm < 4096; }]
   let ParserMatchClass = SImm13Operand;
 }
 
+def simm13_br : Operand<OtherVT> {
+  let ParserMatchClass = SImm13Operand;
+}
+
 def simm22 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= -2097152 && Imm < 2097152; }]> {
+  let ParserMatchClass = SImm22Operand;
+}
+
+def simm22_br : Operand<OtherVT> {
   let ParserMatchClass = SImm22Operand;
 }
 
@@ -547,7 +560,7 @@ multiclass Div<bits<2> size, RegisterClass regtype, ValueType valtype, string as
   }
 }
 
-multiclass BaseAndOrXor<bits<6> regop, bits<6> immop, string asmname, bits<2> size, RegisterClass regtype, ValueType valtype, SDPatternOperator opnode> {
+multiclass BaseAndOrXor<bits<6> regop, bits<5> immop, string asmname, bits<2> size, RegisterClass regtype, ValueType valtype, SDPatternOperator opnode> {
   foreach setflags = 0-1 in {
     defvar setflagsstr = !if(setflags, "setflags", "nosetflags");
     defvar setflagsint = !if(setflags, "1", "0");
@@ -579,35 +592,6 @@ multiclass BaseAndOrXor<bits<6> regop, bits<6> immop, string asmname, bits<2> si
       let Inst{15-14} = size;
     }
 
-    def _nonnull_imm_#setflagsstr : AccaInst<
-      (outs regtype:$Rd),
-      (ins regtype:$lhs, uimm11:$rhs, uimm3:$shift),
-      !strconcat(asmname, " $Rd, $lhs, $rhs, $shift, ", setflagsint),
-      [(set regtype:$Rd, (opnode regtype:$lhs, (ShiftedImm<valtype, uimm11, uimm3> uimm11:$rhs, uimm3:$shift)))]
-    > {
-      bits<4> Rd;
-      bits<4> lhs;
-      bits<11> rhs;
-      bits<3> shift;
-      bit setflags;
-
-      let mayLoad = 0;
-      let mayStore = 0;
-      let hasSideEffects = 0;
-
-      let Defs = !if(setflags, [CZOS], []);
-      let isCompare = setflags;
-
-      let opcode = immop;
-      let Inst{2-0} = shift;
-      let Inst{13-3} = rhs;
-      let Inst{17-14} = lhs;
-      let Inst{21-18} = Rd;
-      let Inst{22} = 0;
-      let Inst{23} = setflags;
-      let Inst{25-24} = size;
-    }
-
     def _null_reg_#setflagsstr : AccaInst<
       (outs),
       (ins regtype:$lhs, regtype:$rhs),
@@ -634,37 +618,73 @@ multiclass BaseAndOrXor<bits<6> regop, bits<6> immop, string asmname, bits<2> si
       let Inst{15-14} = size;
     }
 
-    def _null_imm_#setflagsstr : AccaInst<
-      (outs),
-      (ins regtype:$lhs, uimm11:$rhs, uimm3:$shift),
-      !strconcat(asmname, " null, $lhs, $rhs, $shift, ", setflagsint),
-      []
-    > {
-      bits<4> lhs;
-      bits<11> rhs;
-      bits<3> shift;
-      bit setflags;
+    foreach arith = 0-1 in {
+      defvar arithstr = !if(arith, "arith", "noarith");
+      defvar arithint = !if(arith, "1", "0");
 
-      let mayLoad = 0;
-      let mayStore = 0;
-      let hasSideEffects = 0;
+      def _nonnull_imm_#arithstr#_#setflagsstr : AccaInst<
+        (outs regtype:$Rd),
+        (ins regtype:$lhs, uimm11:$rhs, uimm3:$shift),
+        !strconcat(asmname, " $Rd, $lhs, $rhs, $shift, ", arithint, ", ", setflagsint),
+        [(set regtype:$Rd, (opnode regtype:$lhs, (ShiftedImm<valtype, uimm11, uimm3> uimm11:$rhs, uimm3:$shift)))]
+      > {
+        bits<4> Rd;
+        bits<4> lhs;
+        bits<11> rhs;
+        bits<3> shift;
+        bit setflags;
 
-      let Defs = !if(setflags, [CZOS], []);
-      let isCompare = setflags;
+        let mayLoad = 0;
+        let mayStore = 0;
+        let hasSideEffects = 0;
 
-      let opcode = immop;
-      let Inst{2-0} = shift;
-      let Inst{13-3} = rhs;
-      let Inst{17-14} = lhs;
-      let Inst{21-18} = 0b1111;
-      let Inst{22} = 1;
-      let Inst{23} = setflags;
-      let Inst{25-24} = size;
+        let Defs = !if(setflags, [CZOS], []);
+        let isCompare = setflags;
+
+        let opcode{5-1} = immop;
+        let opcode{0} = arith;
+        let Inst{2-0} = shift;
+        let Inst{13-3} = rhs;
+        let Inst{17-14} = lhs;
+        let Inst{21-18} = Rd;
+        let Inst{22} = 0;
+        let Inst{23} = setflags;
+        let Inst{25-24} = size;
+      }
+
+      def _null_imm_#arithstr#_#setflagsstr : AccaInst<
+        (outs),
+        (ins regtype:$lhs, uimm11:$rhs, uimm3:$shift),
+        !strconcat(asmname, " null, $lhs, $rhs, $shift, ", arithint, ", ", setflagsint),
+        []
+      > {
+        bits<4> lhs;
+        bits<11> rhs;
+        bits<3> shift;
+        bit setflags;
+
+        let mayLoad = 0;
+        let mayStore = 0;
+        let hasSideEffects = 0;
+
+        let Defs = !if(setflags, [CZOS], []);
+        let isCompare = setflags;
+
+        let opcode{5-1} = immop;
+        let opcode{0} = arith;
+        let Inst{2-0} = shift;
+        let Inst{13-3} = rhs;
+        let Inst{17-14} = lhs;
+        let Inst{21-18} = 0b1111;
+        let Inst{22} = 1;
+        let Inst{23} = setflags;
+        let Inst{25-24} = size;
+      }
     }
   }
 }
 
-multiclass AndOrXor<bits<6> regop, bits<6> immop, string asmname, SDPatternOperator opnode> {
+multiclass AndOrXor<bits<6> regop, bits<5> immop, string asmname, SDPatternOperator opnode> {
   defm _byte       : BaseAndOrXor<regop, immop, !strconcat(asmname, "{.b}"), 0b00, I8Regs,  i8,  opnode>;
   defm _doublebyte : BaseAndOrXor<regop, immop, !strconcat(asmname, "{.d}"), 0b01, I16Regs, i16, opnode>;
   defm _quadbyte   : BaseAndOrXor<regop, immop, !strconcat(asmname, "{.q}"), 0b10, I32Regs, i32, opnode>;
@@ -850,7 +870,7 @@ multiclass NegBswap<bits<6> op, string asmname, SDPatternOperator opnode> {
   }
 }
 
-multiclass JmpCall<bits<6> absop, bits<6> regrelop, bits<6> immrelop, string asmname> {
+multiclass JmpCall<bits<6> absop, bits<6> regrelop, bits<6> immrelop, string asmname, bit isCall> {
   let isBranch = 1, mayLoad = 0, mayStore = 0 in {
     let isIndirectBranch = 1 in {
       def _abs_nocond : AccaInst<
@@ -916,7 +936,7 @@ multiclass JmpCall<bits<6> absop, bits<6> regrelop, bits<6> immrelop, string asm
 
     def _immrel_nocond : AccaInst<
       (outs),
-      (ins simm22:$addr),
+      (ins !if(isCall, simm22, simm22_br):$addr),
       !strconcat(asmname, "r $addr"),
       []
     > {
@@ -929,7 +949,7 @@ multiclass JmpCall<bits<6> absop, bits<6> regrelop, bits<6> immrelop, string asm
 
     def _immrel_cond : AccaInst<
       (outs),
-      (ins ccode:$cond, simm22:$addr),
+      (ins ccode:$cond, !if(isCall, simm22, simm22_br):$addr),
       !strconcat(asmname, "r.$cond $addr"),
       []
     > {
@@ -947,14 +967,14 @@ multiclass JmpCall<bits<6> absop, bits<6> regrelop, bits<6> immrelop, string asm
 }
 
 multiclass Cjmp<bits<2> size, RegisterClass regtype/*, string asmsuffix*/> {
-  // FIXME: can't place asmsuffix after `$cond`; it's interpretted as part of the operand name (e.g. `$cond.b`)
+  defvar sizestr = !cond(!eq(size, 0) : "b", !eq(size, 1) : "d", !eq(size, 2) : "q", true : "w");
 
   let isBranch = 1 in {
     let isIndirectBranch = 1 in {
       def _abs : AccaInst<
         (outs),
         (ins ccode:$cond, I64Regs:$Raddr, regtype:$lhs, regtype:$rhs),
-        "cjmpa.$cond $Raddr, $lhs, $rhs",
+        !strconcat("cjmpa.$cond.", sizestr, " $Raddr, $lhs, $rhs"),
         []
       > {
         bits<3> cond;
@@ -973,7 +993,7 @@ multiclass Cjmp<bits<2> size, RegisterClass regtype/*, string asmsuffix*/> {
       def _regrel : AccaInst<
         (outs),
         (ins ccode:$cond, I64Regs:$Raddr, regtype:$lhs, regtype:$rhs),
-        "cjmpr.$cond $Raddr, $lhs, $rhs",
+        !strconcat("cjmpr.$cond.", sizestr, " $Raddr, $lhs, $rhs"),
         []
       > {
         bits<3> cond;
@@ -992,8 +1012,8 @@ multiclass Cjmp<bits<2> size, RegisterClass regtype/*, string asmsuffix*/> {
 
     def _immrel : AccaInst<
       (outs),
-      (ins ccode:$cond, simm13:$addr, regtype:$lhs, regtype:$rhs),
-      "cjmpr.$cond $addr, $lhs, $rhs",
+      (ins ccode:$cond, simm13_br:$addr, regtype:$lhs, regtype:$rhs),
+      !strconcat("cjmpr.$cond.", sizestr, " $addr, $lhs, $rhs"),
       []
     > {
       bits<3> cond;

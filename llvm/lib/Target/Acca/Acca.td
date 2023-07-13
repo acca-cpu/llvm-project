@@ -33,8 +33,23 @@ class Proc<string Name, list<SubtargetFeature> Features>
 
 def : Proc<"generic", []>;
 
+//===----------------------------------------------------------------------===//
+// Assembly parser
+//===----------------------------------------------------------------------===//
+
+def GenericAsmParserVariant : AsmParserVariant {
+  int Variant = 0;
+  string Name = "generic";
+  string BreakCharacters = ".";
+}
+
+//===----------------------------------------------------------------------===//
+// Target Declaration
+//===----------------------------------------------------------------------===//
+
 def Acca : Target {
   let InstructionSet = AccaInstrInfo;
+  let AssemblyParserVariants = [GenericAsmParserVariant];
 }
 
 //===----------------------------------------------------------------------===//

@@ -60,18 +60,6 @@ AccaTargetLowering::AccaTargetLowering(const TargetMachine &TM, const AccaSubtar
   for (MVT VT : MVT::integer_valuetypes())
     setLoadExtAction(ArrayRef<unsigned int>({ ISD::NON_EXTLOAD, ISD::SEXTLOAD, ISD::ZEXTLOAD }), VT, MVT::i1, Promote);
 
-  // Acca doesn't have sext_inreg, replace them with shl/sra
-  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i32, Expand);
-  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand);
-  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8 , Expand);
-  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1 , Expand);
-
-  setOperationAction(ISD::ZERO_EXTEND, MVT::i1 , Custom);
-  setOperationAction(ISD::ZERO_EXTEND, MVT::i8 , Custom);
-  setOperationAction(ISD::ZERO_EXTEND, MVT::i16, Custom);
-  setOperationAction(ISD::ZERO_EXTEND, MVT::i32, Custom);
-  setOperationAction(ISD::ZERO_EXTEND, MVT::i64, Custom);
-
   // Acca has no REM or DIV operations (only combined DIVREM).
   setOperationAction(ISD::UREM, MVT::i8 , Expand);
   setOperationAction(ISD::UREM, MVT::i16, Expand);
@@ -93,26 +81,19 @@ AccaTargetLowering::AccaTargetLowering(const TargetMachine &TM, const AccaSubtar
   setOperationAction(ISD::UDIV, MVT::i32, Expand);
   setOperationAction(ISD::UDIV, MVT::i64, Expand);
 
-  // Acca has no SELECT, SETCC, or SELECT_CC.
-  setOperationAction(ISD::SELECT, MVT::i8 , Expand);
-  setOperationAction(ISD::SELECT, MVT::i16, Expand);
-  setOperationAction(ISD::SELECT, MVT::i32, Expand);
-  setOperationAction(ISD::SELECT, MVT::i64, Expand);
-
-  setOperationAction(ISD::SETCC, MVT::i8 , Expand);
-  setOperationAction(ISD::SETCC, MVT::i16, Expand);
-  setOperationAction(ISD::SETCC, MVT::i32, Expand);
-  setOperationAction(ISD::SETCC, MVT::i64, Expand);
-
+  // Acca has no SELECT_CC.
   setOperationAction(ISD::SELECT_CC, MVT::i8 , Expand);
   setOperationAction(ISD::SELECT_CC, MVT::i16, Expand);
   setOperationAction(ISD::SELECT_CC, MVT::i32, Expand);
   setOperationAction(ISD::SELECT_CC, MVT::i64, Expand);
 
-  // Acca doesn't have BRCOND or BR_JT, it has BR_CC.
-  setOperationAction(ISD::BRCOND, MVT::Other, Expand);
+  // Acca doesn't have BR_CC or BR_JT, it has BRCOND.
+  setOperationAction(ISD::BR_CC, MVT::i8 , Expand);
+  setOperationAction(ISD::BR_CC, MVT::i16, Expand);
+  setOperationAction(ISD::BR_CC, MVT::i32, Expand);
+  setOperationAction(ISD::BR_CC, MVT::i64, Expand);
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
-  //setOperationAction(ISD::BR_CC, MVT::i32, Custom);
+  //setOperationAction(ISD::BRCOND, MVT::i32, Custom);
 
   // Acca does not currently support atomics
   setMaxAtomicSizeInBitsSupported(0);
@@ -143,25 +124,9 @@ bool AccaTargetLowering::useSoftFloat() const {
 SDValue AccaTargetLowering::
 LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   switch (Op.getOpcode()) {
-    case ISD::SIGN_EXTEND:
-      return LowerSIGN_EXTEND(Op, DAG);
-    case ISD::ZERO_EXTEND:
-    case ISD::ANY_EXTEND:
-      return LowerZERO_EXTEND(Op, DAG);
-
     default:
       llvm_unreachable("Invalid/unreachable custom lowering operation");
   }
-}
-
-SDValue AccaTargetLowering::
-LowerSIGN_EXTEND(SDValue Op, SelectionDAG &DAG) const {
-  llvm_unreachable("unimplemented");
-}
-
-SDValue AccaTargetLowering::
-LowerZERO_EXTEND(SDValue Op, SelectionDAG &DAG) const {
-  llvm_unreachable("unimplemented");
 }
 
 SDValue AccaTargetLowering::

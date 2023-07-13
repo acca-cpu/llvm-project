@@ -57,7 +57,6 @@ namespace llvm {
     bool useSoftFloat() const override;
 
   private:
-    SDValue LowerSIGN_EXTEND(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerZERO_EXTEND(SDValue Op, SelectionDAG &DAG) const;
   };
 }

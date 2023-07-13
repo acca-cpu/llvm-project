@@ -208,9 +208,27 @@ defm DIV_word       : Div<0b11, I64Regs, i64, "w">;
 // and/or/xor
 //
 
-defm AND : AndOrXor<0b100001, 0b100000, "and", and>;
-defm OR  : AndOrXor<0b011111, 0b011110, "or",  or>;
-defm XOR : AndOrXor<0b011101, 0b011100, "xor", xor>;
+defm AND : AndOrXor<0b101011, 0b10000, "and", and>;
+defm OR  : AndOrXor<0b010000, 0b01111, "or",  or>;
+defm XOR : AndOrXor<0b001110, 0b01110, "xor", xor>;
+
+foreach setflags = 0-1 in {
+  defvar setflagsstr = !if(setflags, "setflags", "nosetflags");
+
+  foreach size = 0-3 in {
+    defvar regclass = !cond(!eq(size, 0) : I8Regs, !eq(size, 1) : I16Regs, !eq(size, 2) : I32Regs, true : I64Regs);
+    defvar sizechar = !cond(!eq(size, 0) : "b", !eq(size, 1) : "d", !eq(size, 2) : "q", true : "w");
+    defvar opsize = !cond(!eq(size, 0) : "byte", !eq(size, 1) : "doublebyte", !eq(size, 2) : "quadbyte", true : "word");
+    defvar xor_op = !cast<Instruction>(!strconcat("XOR_", opsize, "_nonnull_imm_arith_", setflagsstr));
+    defvar xor_val = !if(!eq(size, 0), 0xff, 0x7ff);
+    def NOT_#opsize#_#setflagsstr :
+      Pseudo<(outs regclass:$Rd), (ins regclass:$Ra),
+             [(set regclass:$Rd, (not regclass:$Ra))],
+             !strconcat("not{.", sizechar, "} $Rd, $Ra, ",
+               !if(setflags, "1", "0"))>,
+      PseudoInstExpansion<(xor_op regclass:$Rd, regclass:$Ra, xor_val, 0)>;
+  }
+}
 
 //
 // shl/shr/rot
@@ -220,6 +238,43 @@ defm SHL : ShlShrRot<0b011010, 0b011011, "shl", 0, shl>;
 defm SHR : ShlShrRot<0b011000, 0b011001, "shr", 1, srl>; // placeholder opnode
 defm ROT : ShlShrRot<0b010110, 0b010111, "rot", 0, rotr>;
 
+// patterns for sext and zext, implemented with shl/shr
+foreach bigsize = 0-3 in {
+  defvar smallsizes = !filter(i, [0, 1, 2, 3], !lt(i, bigsize));
+  foreach smallsize = smallsizes in {
+    defvar bigvalsize = !cond(!eq(bigsize, 0) : i8, !eq(bigsize, 1) : i16, !eq(bigsize, 2) : i32, true : i64);
+    defvar smallvalsize = !cond(!eq(smallsize, 0) : i8, !eq(smallsize, 1) : i16, !eq(smallsize, 2) : i32, true : i64);
+    defvar bigclass = !cond(!eq(bigsize, 0) : I8Regs, !eq(bigsize, 1) : I16Regs, !eq(bigsize, 2) : I32Regs, true : I64Regs);
+    defvar smallclass = !cond(!eq(smallsize, 0) : I8Regs, !eq(smallsize, 1) : I16Regs, !eq(smallsize, 2) : I32Regs, true : I64Regs);
+    defvar smallbits = !cond(!eq(smallsize, 0) : 8, !eq(smallsize, 1) : 16, !eq(smallsize, 2) : 32, true : 64);
+    defvar subreg_idx = SubRegIndex<smallbits>;
+    defvar opsize = !cond(!eq(bigsize, 0) : "byte", !eq(bigsize, 1) : "doublebyte", !eq(bigsize, 2) : "quadbyte", true : "word");
+    defvar shrop_unsigned = !cast<Instruction>(!strconcat("SHR_", opsize, "_nonnull_imm_noarith_nosetflags"));
+    defvar shrop_signed = !cast<Instruction>(!strconcat("SHR_", opsize, "_nonnull_imm_arith_nosetflags"));
+    defvar shlop = !cast<Instruction>(!strconcat("SHL_", opsize, "_nonnull_imm_noarith_nosetflags"));
+    def : Pat<(bigvalsize (sext smallclass:$val)),
+              (shrop_signed
+                (shlop
+                  (INSERT_SUBREG
+                    (bigvalsize (IMPLICIT_DEF)),
+                    smallclass:$val,
+                    subreg_idx
+                  ),
+                  smallbits),
+                smallbits)>;
+    def : Pat<(bigvalsize (zext smallclass:$val)),
+              (shrop_unsigned
+                (shlop
+                  (INSERT_SUBREG
+                    (bigvalsize (IMPLICIT_DEF)),
+                    smallclass:$val,
+                    subreg_idx
+                  ),
+                  smallbits),
+                smallbits)>;
+  }
+}
+
 //
 // neg/bswap
 //
@@ -228,11 +283,82 @@ defm NEG   : NegBswap<0b010101, "neg",   ineg>;
 defm BSWAP : NegBswap<0b010100, "bswap", bswap>;
 
 //
+// soc
+//
+
+foreach size = 0-3 in {
+  foreach borrow = 0-1 in {
+    defvar borrowstr = !if(borrow, "borrow", "noborrow");
+    defvar opsize = !cond(!eq(size, 0) : "byte", !eq(size, 1) : "doublebyte", !eq(size, 2) : "quadbyte", true : "word");
+    defvar sizechar = !cond(!eq(size, 0) : "b", !eq(size, 1) : "d", !eq(size, 2) : "q", true : "w");
+    defvar regclass = !cond(!eq(size, 0) : I8Regs, !eq(size, 1) : I16Regs, !eq(size, 2) : I32Regs, true : I64Regs);
+
+    def SOC_#opsize#_#borrowstr : AccaInst<
+      (outs regclass:$Rd),
+      (ins regclass:$lhs, regclass:$rhs, uimm10:$cm),
+      !strconcat("soc{.", sizechar, "} $Rd, $lhs, $rhs, $cm, ", !if(borrow, "1", "0")),
+      []
+    > {
+      bits<4> Rd;
+      bits<4> lhs;
+      bits<4> rhs;
+      bits<8> cm;
+
+      let mayLoad = 0;
+      let mayStore = 0;
+      let hasSideEffects = 0;
+
+      let Uses = !if(borrow, [CZOS], []);
+      let isCompare = 1;
+
+      let opcode = 0b111100;
+      let Inst{3-0} = rhs;
+      let Inst{7-4} = lhs;
+      let Inst{11-8} = Rd;
+      let Inst{13-12} = size;
+      let Inst{14} = borrow;
+      let Inst{24-15} = cm;
+    }
+  }
+}
+
+//
+// sof
+//
+
+foreach size = 0-3 in {
+  defvar opsize = !cond(!eq(size, 0) : "byte", !eq(size, 1) : "doublebyte", !eq(size, 2) : "quadbyte", true : "word");
+  defvar sizechar = !cond(!eq(size, 0) : "b", !eq(size, 1) : "d", !eq(size, 2) : "q", true : "w");
+  defvar regclass = !cond(!eq(size, 0) : I8Regs, !eq(size, 1) : I16Regs, !eq(size, 2) : I32Regs, true : I64Regs);
+
+  def SOF_#opsize : AccaInst<
+    (outs regclass:$Rd),
+    (ins uimm10:$cm),
+    !strconcat("soc{.", sizechar, "} $Rd, $cm"),
+    []
+  > {
+    bits<4> Rd;
+    bits<8> cm;
+
+    let mayLoad = 0;
+    let mayStore = 0;
+    let hasSideEffects = 0;
+
+    let opcode = 0b111101;
+    let Inst{3-0} = Rd;
+    let Inst{5-4} = size;
+    let Inst{15-6} = cm;
+  }
+}
+
+//
 // jmpa/jmpr
 //
 
 let isTerminator = 1 in
-  defm JMP : JmpCall<0b010011, 0b010010, 0b010001, "jmp">;
+  defm JMP : JmpCall<0b010011, 0b010010, 0b010001, "jmp", 0>;
+
+def : Pat<(br bb:$addr), (JMP_immrel_nocond bb:$addr)>;
 
 //
 // cjmpa/cjmpr
@@ -248,7 +374,7 @@ defm CJMP_word       : Cjmp<0b11, I64Regs/*, "w"*/>;
 //
 
 let Defs = [R15], isCall = 1 in
-  defm CALL : JmpCall<0b001010, 0b001001, 0b001000, "call">;
+  defm CALL : JmpCall<0b001010, 0b001001, 0b001000, "call", 1>;
 
 //
 // ret/eret/udf/dbg
@@ -328,6 +454,10 @@ def STM : AccaInst<
   let Inst{25-22} = Rd;
 }
 
+//
+// codegen-only pseudo-instructions for CALL and TAIL
+//
+
 let isCall = 1, Defs = [R15] in
   def PseudoCALL : Pseudo<(outs), (ins simm22_symbol:$addr)>;
 
@@ -353,17 +483,82 @@ def : Pat<(acca_tail (iPTR texternalsym:$addr)),
 
 let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1 in {
   def PseudoJMP_TAIL : Pseudo<(outs), (ins simm22_symbol:$addr)>,
-                    PseudoInstExpansion<(JMP_immrel_nocond simm22:$addr)>;
+                    PseudoInstExpansion<(JMP_immrel_nocond simm22_br:$addr)>;
   def PseudoJMPABS_TAIL : Pseudo<(outs), (ins I64Regs:$addr)>,
                     PseudoInstExpansion<(JMP_abs_nocond I64Regs:$addr)>;
   def PseudoJMPREGREL_TAIL : Pseudo<(outs), (ins I64Regs:$addr)>,
                     PseudoInstExpansion<(JMP_regrel_nocond I64Regs:$addr)>;
 }
 
+//
+// codegen-only pseudo-instructions for stack adjustment for calls
+//
+
 // Pessimistically assume the stack pointer will be clobbered
-let Defs = [R3], Uses = [R3] in {
-def ADJCALLSTACKDOWN : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
-                              [(callseq_start timm:$amt1, timm:$amt2)]>;
-def ADJCALLSTACKUP   : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
-                              [(callseq_end timm:$amt1, timm:$amt2)]>;
-} // Defs = [R3], Uses = [R3]
+let Defs = [R13], Uses = [R13] in {
+  def ADJCALLSTACKDOWN : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+                                [(callseq_start timm:$amt1, timm:$amt2)]>;
+  def ADJCALLSTACKUP   : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+                                [(callseq_end timm:$amt1, timm:$amt2)]>;
+}
+
+//
+// patterns for `select`
+//
+foreach size = 0-3 in {
+  defvar regclass = !cond(!eq(size, 0) : I8Regs, !eq(size, 1) : I16Regs, !eq(size, 2) : I32Regs, true : I64Regs);
+  defvar sizechar = !cond(!eq(size, 0) : "b", !eq(size, 1) : "d", !eq(size, 2) : "q", true : "w");
+  defvar opsize = !cond(!eq(size, 0) : "byte", !eq(size, 1) : "doublebyte", !eq(size, 2) : "quadbyte", true : "word");
+  defvar shiftbits = !cond(!eq(size, 0) : 7, !eq(size, 1) : 15, !eq(size, 2) : 31, true : 63);
+
+  defvar not_op = !cast<Instruction>(!strconcat("NOT_", opsize, "_nosetflags"));
+  defvar and_op = !cast<Instruction>(!strconcat("AND_", opsize, "_nonnull_reg_nosetflags"));
+  defvar or_op  = !cast<Instruction>(!strconcat("OR_",  opsize, "_nonnull_reg_nosetflags"));
+  defvar shl_op = !cast<Instruction>(!strconcat("SHL_", opsize, "_nonnull_imm_noarith_nosetflags"));
+  defvar shr_signed_op = !cast<Instruction>(!strconcat("SHR_", opsize, "_nonnull_imm_arith_nosetflags"));
+
+  def : Pat<(select regclass:$cond, regclass:$trueval, regclass:$falseval),
+            (or_op
+              (and_op
+                (shr_signed_op (shl_op $cond, shiftbits), shiftbits),
+                $trueval),
+              (and_op
+                (not_op (shr_signed_op (shl_op $cond, shiftbits), shiftbits)),
+                $falseval))>;
+}
+
+//
+// patterns for `setcc`
+//
+foreach size = 0-3 in {
+  defvar regclass = !cond(!eq(size, 0) : I8Regs, !eq(size, 1) : I16Regs, !eq(size, 2) : I32Regs, true : I64Regs);
+  defvar opsize = !cond(!eq(size, 0) : "byte", !eq(size, 1) : "doublebyte", !eq(size, 2) : "quadbyte", true : "word");
+
+  defvar soc_op = !cast<Instruction>(!strconcat("SOC_", opsize, "_noborrow"));
+
+  // the carry bit means that the LHS is unsigned-less-than the RHS
+  def : Pat<(setult regclass:$lhs, regclass:$rhs),
+            (soc_op regclass:$lhs, regclass:$rhs, 0b0000000001)>;
+  // unsigned-greater-than is just the same as above, but flip LHS and RHS
+  def : Pat<(setugt regclass:$lhs, regclass:$rhs),
+            (soc_op regclass:$rhs, regclass:$lhs, 0b0000000001)>;
+
+  // to check for unsigned-greater-than-or-equal, we just check for the
+  // opposite of unsigned-less-than. i.e. we check that the carry bit is
+  // *not* set.
+  def : Pat<(setuge regclass:$lhs, regclass:$rhs),
+            (soc_op regclass:$lhs, regclass:$rhs, 0b0000000010)>;
+  // unsigned-less-than-or-equal is just the same as above, but flip LHS and RHS
+  def : Pat<(setule regclass:$lhs, regclass:$rhs),
+            (soc_op regclass:$rhs, regclass:$lhs, 0b0000000010)>;
+
+  // here, we check for `S ^ O`. this is because the sign bit (S) is set
+  // whenever the result is negative and the overflow bit (O) is set
+  // when signed underflow occurs (i.e. if LHS is negative and RHS is positive
+  // and the result is positive or if LHS is positive and RHS is negative and
+  // the result is negative).
+  def : Pat<(setlt regclass:$lhs, regclass:$rhs),
+            (soc_op regclass:$lhs, regclass:$rhs, 0b00000000)>;
+  def : Pat<(setgt regclass:$lhs, regclass:$rhs),
+            (soc_op regclass:$rhs, regclass:$lhs, 0b00000000)>;
+}

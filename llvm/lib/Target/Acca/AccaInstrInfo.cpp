@@ -220,7 +220,7 @@ copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
     BuildMI(MBB, I, DL, get(Acca::LDM), DestReg)
       .addImm(AccaSysReg::flags);
 
-    BuildMI(MBB, I, DL, get(Acca::AND_word_nonnull_imm_nosetflags), DestReg)
+    BuildMI(MBB, I, DL, get(Acca::AND_word_nonnull_imm_noarith_nosetflags), DestReg)
       .addReg(DestReg)
       .addImm(0xf) // the CZOS bits are bits 0-3
       .addImm(0);
