@@ -900,6 +900,8 @@ multiclass JmpCall<bits<6> absop, bits<6> regrelop, bits<6> immrelop, string asm
       > {
         bits<4> Ra;
 
+        let Defs = !if(isCall, [R15], []);
+
         let opcode = absop;
         let Inst{3-0} = Ra;
         let Inst{7-4} = 0b1111;
@@ -915,6 +917,7 @@ multiclass JmpCall<bits<6> absop, bits<6> regrelop, bits<6> immrelop, string asm
         bits<4> Ra;
 
         let Uses = [CZOS];
+        let Defs = !if(isCall, [R15], []);
 
         let opcode = absop;
         let Inst{3-0} = Ra;
@@ -929,6 +932,8 @@ multiclass JmpCall<bits<6> absop, bits<6> regrelop, bits<6> immrelop, string asm
         []
       > {
         bits<4> Ra;
+
+        let Defs = !if(isCall, [R15], []);
 
         let opcode = regrelop;
         let Inst{3-0} = Ra;
@@ -945,6 +950,7 @@ multiclass JmpCall<bits<6> absop, bits<6> regrelop, bits<6> immrelop, string asm
         bits<4> Ra;
 
         let Uses = [CZOS];
+        let Defs = !if(isCall, [R15], []);
 
         let opcode = regrelop;
         let Inst{3-0} = Ra;
