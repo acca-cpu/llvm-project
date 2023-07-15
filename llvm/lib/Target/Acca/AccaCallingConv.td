@@ -31,4 +31,4 @@ def RetCC_Acca : CallingConv<[
   CCIfType<[i64], CCAssignToReg<[R0]>>
 ]>;
 
-def CSR_Acca : CalleeSavedRegs<(add R7, R8, R13, R14)>;
+def CSR_Acca : CalleeSavedRegs<(add R7, R8, R13, R14, R15)>;
