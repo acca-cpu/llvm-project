@@ -552,3 +552,18 @@ getRegisterByName(const char* RegName, LLT Ty,
   report_fatal_error(Twine("Invalid register name \"" + StringRef(RegName) +
                            "\"."));
 };
+
+EVT AccaTargetLowering::
+getSetCCResultType(const DataLayout &DL, LLVMContext &Context, EVT VT) const {
+  if (VT.isVector())
+    llvm_unreachable("Acca doesn't support vector types yet");
+
+  // VT may be Other, used to find the "canonical" SetCC type.
+  // Acca supports any size boolean type for conditions, so arbitrarily choose
+  // i64; if you'd like a reason: match Acca's register width?
+  if (!VT.isScalarInteger())
+    return MVT::i64;
+
+  // Acca's SETCC equivalent returns a result of the same type as its operands
+  return VT;
+};

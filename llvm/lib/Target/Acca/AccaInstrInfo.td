@@ -25,7 +25,8 @@ foreach bigsize = 0-3 in {
     defvar smallvalsize = !cond(!eq(smallsize, 0) : i8, !eq(smallsize, 1) : i16, !eq(smallsize, 2) : i32, true : i64);
     defvar bigclass = !cond(!eq(bigsize, 0) : I8Regs, !eq(bigsize, 1) : I16Regs, !eq(bigsize, 2) : I32Regs, true : I64Regs);
     defvar smallclass = !cond(!eq(smallsize, 0) : I8Regs, !eq(smallsize, 1) : I16Regs, !eq(smallsize, 2) : I32Regs, true : I64Regs);
-    defvar subreg_idx = SubRegIndex<!cond(!eq(smallsize, 0) : 8, !eq(smallsize, 1) : 16, !eq(smallsize, 2) : 32, true : 64)>;
+    defvar opsize = !cond(!eq(smallsize, 0) : "byte", !eq(smallsize, 1) : "doublebyte", !eq(smallsize, 2) : "quadbyte", true : "word");
+    defvar subreg_idx = !cast<SubRegIndex>(!strconcat("subreg_", opsize));
     def : Pat<(bigvalsize (anyext smallclass:$val)), (INSERT_SUBREG (bigvalsize (IMPLICIT_DEF)), smallclass:$val, subreg_idx)>;
     def : Pat<(smallvalsize (trunc bigclass:$val)), (EXTRACT_SUBREG bigclass:$val, subreg_idx)>;
   }
@@ -78,12 +79,12 @@ def : Pat<(i64 (load I64Regs:$Rb)), (LDS_word I64Regs:$Rb)>;
 
 // single load anyext patterns
 
-def : Pat<(i16 (extloadi8 I64Regs:$Rb)), (INSERT_SUBREG (i16 (IMPLICIT_DEF)), (LDS_byte I64Regs:$Rb), SubRegIndex<8>)>;
-def : Pat<(i32 (extloadi8 I64Regs:$Rb)), (INSERT_SUBREG (i32 (IMPLICIT_DEF)), (LDS_byte I64Regs:$Rb), SubRegIndex<8>)>;
-def : Pat<(i64 (extloadi8 I64Regs:$Rb)), (INSERT_SUBREG (i64 (IMPLICIT_DEF)), (LDS_byte I64Regs:$Rb), SubRegIndex<8>)>;
-def : Pat<(i32 (extloadi16 I64Regs:$Rb)), (INSERT_SUBREG (i32 (IMPLICIT_DEF)), (LDS_doublebyte I64Regs:$Rb), SubRegIndex<16>)>;
-def : Pat<(i64 (extloadi16 I64Regs:$Rb)), (INSERT_SUBREG (i64 (IMPLICIT_DEF)), (LDS_doublebyte I64Regs:$Rb), SubRegIndex<16>)>;
-def : Pat<(i64 (extloadi32 I64Regs:$Rb)), (INSERT_SUBREG (i64 (IMPLICIT_DEF)), (LDS_quadbyte I64Regs:$Rb), SubRegIndex<32>)>;
+def : Pat<(i16 (extloadi8 I64Regs:$Rb)), (INSERT_SUBREG (i16 (IMPLICIT_DEF)), (LDS_byte I64Regs:$Rb), subreg_byte)>;
+def : Pat<(i32 (extloadi8 I64Regs:$Rb)), (INSERT_SUBREG (i32 (IMPLICIT_DEF)), (LDS_byte I64Regs:$Rb), subreg_byte)>;
+def : Pat<(i64 (extloadi8 I64Regs:$Rb)), (INSERT_SUBREG (i64 (IMPLICIT_DEF)), (LDS_byte I64Regs:$Rb), subreg_byte)>;
+def : Pat<(i32 (extloadi16 I64Regs:$Rb)), (INSERT_SUBREG (i32 (IMPLICIT_DEF)), (LDS_doublebyte I64Regs:$Rb), subreg_doublebyte)>;
+def : Pat<(i64 (extloadi16 I64Regs:$Rb)), (INSERT_SUBREG (i64 (IMPLICIT_DEF)), (LDS_doublebyte I64Regs:$Rb), subreg_doublebyte)>;
+def : Pat<(i64 (extloadi32 I64Regs:$Rb)), (INSERT_SUBREG (i64 (IMPLICIT_DEF)), (LDS_quadbyte I64Regs:$Rb), subreg_quadbyte)>;
 
 //
 // load immediate
@@ -126,6 +127,11 @@ def LDI_noshift_clearall : AccaInst<
   let Inst{9-4} = 0b000000;
   let Inst{25-10} = val;
 }
+
+def PseudoLDI_byte       : Pseudo<(outs I8Regs:$Rd),  (ins timm64:$val), []>;
+def PseudoLDI_doublebyte : Pseudo<(outs I16Regs:$Rd), (ins timm64:$val), []>;
+def PseudoLDI_quadbyte   : Pseudo<(outs I32Regs:$Rd), (ins timm64:$val), []>;
+def PseudoLDI_word       : Pseudo<(outs I64Regs:$Rd), (ins timm64:$val), []>;
 
 //
 // load relative
@@ -247,11 +253,12 @@ foreach bigsize = 0-3 in {
     defvar bigclass = !cond(!eq(bigsize, 0) : I8Regs, !eq(bigsize, 1) : I16Regs, !eq(bigsize, 2) : I32Regs, true : I64Regs);
     defvar smallclass = !cond(!eq(smallsize, 0) : I8Regs, !eq(smallsize, 1) : I16Regs, !eq(smallsize, 2) : I32Regs, true : I64Regs);
     defvar smallbits = !cond(!eq(smallsize, 0) : 8, !eq(smallsize, 1) : 16, !eq(smallsize, 2) : 32, true : 64);
-    defvar subreg_idx = SubRegIndex<smallbits>;
-    defvar opsize = !cond(!eq(bigsize, 0) : "byte", !eq(bigsize, 1) : "doublebyte", !eq(bigsize, 2) : "quadbyte", true : "word");
-    defvar shrop_unsigned = !cast<Instruction>(!strconcat("SHR_", opsize, "_nonnull_imm_noarith_nosetflags"));
-    defvar shrop_signed = !cast<Instruction>(!strconcat("SHR_", opsize, "_nonnull_imm_arith_nosetflags"));
-    defvar shlop = !cast<Instruction>(!strconcat("SHL_", opsize, "_nonnull_imm_noarith_nosetflags"));
+    defvar bigopsize = !cond(!eq(bigsize, 0) : "byte", !eq(bigsize, 1) : "doublebyte", !eq(bigsize, 2) : "quadbyte", true : "word");
+    defvar smallopsize = !cond(!eq(smallsize, 0) : "byte", !eq(smallsize, 1) : "doublebyte", !eq(smallsize, 2) : "quadbyte", true : "word");
+    defvar subreg_idx = !cast<SubRegIndex>(!strconcat("subreg_", smallopsize));
+    defvar shrop_unsigned = !cast<Instruction>(!strconcat("SHR_", bigopsize, "_nonnull_imm_noarith_nosetflags"));
+    defvar shrop_signed = !cast<Instruction>(!strconcat("SHR_", bigopsize, "_nonnull_imm_arith_nosetflags"));
+    defvar shlop = !cast<Instruction>(!strconcat("SHL_", bigopsize, "_nonnull_imm_noarith_nosetflags"));
     def : Pat<(bigvalsize (sext smallclass:$val)),
               (shrop_signed
                 (shlop
@@ -295,14 +302,14 @@ foreach size = 0-3 in {
 
     def SOC_#opsize#_#borrowstr : AccaInst<
       (outs regclass:$Rd),
-      (ins regclass:$lhs, regclass:$rhs, uimm10:$cm),
-      !strconcat("soc{.", sizechar, "} $Rd, $lhs, $rhs, $cm, ", !if(borrow, "1", "0")),
+      (ins regclass:$lhs, regclass:$rhs, ccode:$cond),
+      !strconcat("soc.$cond{.", sizechar, "} $Rd, $lhs, $rhs, ", !if(borrow, "1", "0")),
       []
     > {
       bits<4> Rd;
       bits<4> lhs;
       bits<4> rhs;
-      bits<8> cm;
+      bits<4> cond;
 
       let mayLoad = 0;
       let mayStore = 0;
@@ -317,7 +324,7 @@ foreach size = 0-3 in {
       let Inst{11-8} = Rd;
       let Inst{13-12} = size;
       let Inst{14} = borrow;
-      let Inst{24-15} = cm;
+      let Inst{18-15} = cond;
     }
   }
 }
@@ -333,12 +340,12 @@ foreach size = 0-3 in {
 
   def SOF_#opsize : AccaInst<
     (outs regclass:$Rd),
-    (ins uimm10:$cm),
-    !strconcat("soc{.", sizechar, "} $Rd, $cm"),
+    (ins ccode:$cond),
+    !strconcat("soc.$cond{.", sizechar, "} $Rd"),
     []
   > {
     bits<4> Rd;
-    bits<8> cm;
+    bits<4> cond;
 
     let mayLoad = 0;
     let mayStore = 0;
@@ -347,7 +354,7 @@ foreach size = 0-3 in {
     let opcode = 0b111101;
     let Inst{3-0} = Rd;
     let Inst{5-4} = size;
-    let Inst{15-6} = cm;
+    let Inst{9-6} = cond;
   }
 }
 
@@ -538,27 +545,58 @@ foreach size = 0-3 in {
 
   // the carry bit means that the LHS is unsigned-less-than the RHS
   def : Pat<(setult regclass:$lhs, regclass:$rhs),
-            (soc_op regclass:$lhs, regclass:$rhs, 0b0000000001)>;
+            (soc_op regclass:$lhs, regclass:$rhs, COND_C)>;
   // unsigned-greater-than is just the same as above, but flip LHS and RHS
   def : Pat<(setugt regclass:$lhs, regclass:$rhs),
-            (soc_op regclass:$rhs, regclass:$lhs, 0b0000000001)>;
+            (soc_op regclass:$rhs, regclass:$lhs, COND_C)>;
 
   // to check for unsigned-greater-than-or-equal, we just check for the
-  // opposite of unsigned-less-than. i.e. we check that the carry bit is
-  // *not* set.
+  // opposite of unsigned-less-than. i.e. we check that the carry bit
+  // is *not* set.
   def : Pat<(setuge regclass:$lhs, regclass:$rhs),
-            (soc_op regclass:$lhs, regclass:$rhs, 0b0000000010)>;
+            (soc_op regclass:$lhs, regclass:$rhs, COND_NC)>;
   // unsigned-less-than-or-equal is just the same as above, but flip LHS and RHS
   def : Pat<(setule regclass:$lhs, regclass:$rhs),
-            (soc_op regclass:$rhs, regclass:$lhs, 0b0000000010)>;
+            (soc_op regclass:$rhs, regclass:$lhs, COND_NC)>;
 
-  // here, we check for `S ^ O`. this is because the sign bit (S) is set
-  // whenever the result is negative and the overflow bit (O) is set
-  // when signed underflow occurs (i.e. if LHS is negative and RHS is positive
-  // and the result is positive or if LHS is positive and RHS is negative and
-  // the result is negative).
+  // the virtual less-than bit means that the LHS is signed-less-than the RHS
   def : Pat<(setlt regclass:$lhs, regclass:$rhs),
-            (soc_op regclass:$lhs, regclass:$rhs, 0b00000000)>;
+            (soc_op regclass:$lhs, regclass:$rhs, COND_L)>;
+  // signed-grater-than is just the same as above, but flip LHS and RHS
   def : Pat<(setgt regclass:$lhs, regclass:$rhs),
-            (soc_op regclass:$rhs, regclass:$lhs, 0b00000000)>;
+            (soc_op regclass:$rhs, regclass:$lhs, COND_L)>;
+
+  // to check for signed-greater-than-or-equal, we just check for the
+  // opposite of signed-less-than. i.e. we check that the virtual less-than bit
+  // is *not* set.
+  def : Pat<(setge regclass:$lhs, regclass:$rhs),
+            (soc_op regclass:$lhs, regclass:$rhs, COND_NL)>;
+  // signed-less-than-or-equal is just the same as above, but flip LHS and RHS
+  def : Pat<(setle regclass:$lhs, regclass:$rhs),
+            (soc_op regclass:$rhs, regclass:$lhs, COND_NL)>;
+
+  // the zero bit means that the LHS is equal to the RHS
+  def : Pat<(seteq regclass:$lhs, regclass:$rhs),
+            (soc_op regclass:$lhs, regclass:$rhs, COND_Z)>;
+
+  // logically, for inequality, we check for the opposite of equality
+  // i.e. the zero bit is *not* set
+  def : Pat<(setne regclass:$lhs, regclass:$rhs),
+            (soc_op regclass:$lhs, regclass:$rhs, COND_NZ)>;
+}
+
+//
+// patterns for `brcond`
+//
+foreach size = 0-3 in {
+  defvar regclass = !cond(!eq(size, 0) : I8Regs, !eq(size, 1) : I16Regs, !eq(size, 2) : I32Regs, true : I64Regs);
+  defvar regtype = !cond(!eq(size, 0) : i8, !eq(size, 1) : i16, !eq(size, 2) : i32, true : i64);
+  defvar opsize = !cond(!eq(size, 0) : "byte", !eq(size, 1) : "doublebyte", !eq(size, 2) : "quadbyte", true : "word");
+  defvar bitcount = !cond(!eq(size, 0) : 8, !eq(size, 1) : 16, !eq(size, 2) : 32, true : 64);
+  defvar immzero = !if(!eq(size, 3), (LDI_noshift_clearall 0), (EXTRACT_SUBREG (LDI_noshift_clearall 0), !cast<SubRegIndex>(!strconcat("subreg_", opsize))));
+
+  defvar cjmp_op = !cast<Instruction>(!strconcat("CJMP_", opsize, "_immrel"));
+
+  def : Pat<(brcond regclass:$test, bb:$addr),
+            (cjmp_op COND_NZ, bb:$addr, regclass:$test, immzero)>;
 }

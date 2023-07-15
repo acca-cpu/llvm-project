@@ -16,6 +16,12 @@ class AccaReg<bits<4> enc, string n, list<string> alt = []> : Register<n> {
   let AltNames = alt;
 }
 
+let Namespace = "Acca" in {
+  def subreg_byte : SubRegIndex<8>;
+  def subreg_doublebyte : SubRegIndex<16>;
+  def subreg_quadbyte : SubRegIndex<32>;
+}
+
 foreach i = 0-15 in {
   def R#i#B : AccaReg<i, "r"#i#"b", !cond(
     !eq(i, 13) : ["r13b", "rfpb"],
@@ -31,7 +37,7 @@ foreach i = 0-15 in {
     true : []
   )>, DwarfRegNum<[i]> {
     let SubRegs = [!cast<AccaReg>("R"#i#"B")];
-    let SubRegIndices = [SubRegIndex<8>];
+    let SubRegIndices = [subreg_byte];
   }
 
   def R#i#Q : AccaReg<i, "r"#i#"q", !cond(
@@ -41,7 +47,7 @@ foreach i = 0-15 in {
     true : []
   )>, DwarfRegNum<[i]> {
     let SubRegs = [!cast<AccaReg>("R"#i#"D")];
-    let SubRegIndices = [SubRegIndex<16>];
+    let SubRegIndices = [subreg_doublebyte];
   }
 
   def R#i : AccaReg<i, "r"#i, !cond(
@@ -51,7 +57,7 @@ foreach i = 0-15 in {
     true : ["r"#i#"w"]
   )>, DwarfRegNum<[i]> {
     let SubRegs = [!cast<AccaReg>("R"#i#"Q")];
-    let SubRegIndices = [SubRegIndex<32>];
+    let SubRegIndices = [subreg_quadbyte];
   }
 }
 

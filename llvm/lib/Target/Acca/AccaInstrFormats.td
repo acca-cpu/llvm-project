@@ -40,6 +40,11 @@ class SImm<int width> : AsmOperandClass {
   let DiagnosticType = "InvalidSImm" # width;
 }
 
+class TImm<int width> : AsmOperandClass {
+  let Name = "TImm" # width;
+  let DiagnosticType = "InvalidTImm" # width;
+}
+
 def UImm2Operand : UImm<2>;
 def UImm3Operand : UImm<3>;
 def UImm6Operand : UImm<6>;
@@ -51,6 +56,8 @@ def UImm22Operand : UImm<22>;
 
 def SImm13Operand : SImm<13>;
 def SImm22Operand : SImm<22>;
+
+def TImm64Operand : TImm<64>;
 
 def uimm2 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= 0 && Imm < 4; }]> {
   let ParserMatchClass = UImm2Operand;
@@ -66,10 +73,6 @@ def uimm6 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= 0 && Imm < 64; }]> {
 
 def uimm7 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= 0 && Imm < 128; }]> {
   let ParserMatchClass = UImm7Operand;
-}
-
-def uimm10 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= 0 && Imm < 1024; }]> {
-  let ParserMatchClass = UImm10Operand;
 }
 
 def uimm11 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= 0 && Imm < 2048; }]> {
@@ -104,16 +107,32 @@ def simm22_symbol : Operand<i64> {
   let ParserMatchClass = SImm22Operand;
 }
 
+def timm64 : Operand<i64>, TImmLeaf<i64, [{ return true; }]> {
+  let ParserMatchClass = TImm64Operand;
+}
+
 def CondCode : AsmOperandClass {
   let Name = "CondCode";
   let DiagnosticType = "InvalidCondCode";
 }
 
-// 3-bit immediate
+// 4-bit immediate
 def ccode : Operand<i8> {
   let PrintMethod = "printCondCode";
   let ParserMatchClass = CondCode;
 }
+
+defvar COND_C  = 0b0000;
+defvar COND_NC = 0b0001;
+defvar COND_Z  = 0b0010;
+defvar COND_NZ = 0b0011;
+defvar COND_O  = 0b0100;
+defvar COND_NO = 0b0101;
+defvar COND_S  = 0b0110;
+defvar COND_NS = 0b0111;
+defvar COND_L  = 0b1000;
+defvar COND_NL = 0b1001;
+defvar COND_NONE = 0b1111;
 
 class ShiftedImm<ValueType Ty, Operand base, Operand shift> : Operand<Ty>, ComplexPattern<Ty, 2, "SelectShiftedImm", [imm]> {
   let PrintMethod = "printShiftedImm";
@@ -977,7 +996,7 @@ multiclass Cjmp<bits<2> size, RegisterClass regtype/*, string asmsuffix*/> {
         !strconcat("cjmpa.$cond.", sizestr, " $Raddr, $lhs, $rhs"),
         []
       > {
-        bits<3> cond;
+        bits<4> cond;
         bits<4> Raddr;
         bits<4> lhs;
         bits<4> rhs;
@@ -987,7 +1006,7 @@ multiclass Cjmp<bits<2> size, RegisterClass regtype/*, string asmsuffix*/> {
         let Inst{7-4} = lhs;
         let Inst{11-8} = Raddr;
         let Inst{13-12} = size;
-        let Inst{16-14} = cond;
+        let Inst{17-14} = cond;
       }
 
       def _regrel : AccaInst<
@@ -996,7 +1015,7 @@ multiclass Cjmp<bits<2> size, RegisterClass regtype/*, string asmsuffix*/> {
         !strconcat("cjmpr.$cond.", sizestr, " $Raddr, $lhs, $rhs"),
         []
       > {
-        bits<3> cond;
+        bits<4> cond;
         bits<4> Raddr;
         bits<4> lhs;
         bits<4> rhs;
@@ -1006,7 +1025,7 @@ multiclass Cjmp<bits<2> size, RegisterClass regtype/*, string asmsuffix*/> {
         let Inst{7-4} = lhs;
         let Inst{11-8} = Raddr;
         let Inst{13-12} = size;
-        let Inst{16-14} = cond;
+        let Inst{17-14} = cond;
       }
     }
 
@@ -1016,17 +1035,18 @@ multiclass Cjmp<bits<2> size, RegisterClass regtype/*, string asmsuffix*/> {
       !strconcat("cjmpr.$cond.", sizestr, " $addr, $lhs, $rhs"),
       []
     > {
-      bits<3> cond;
+      bits<4> cond;
       bits<13> addr;
       bits<4> lhs;
       bits<4> rhs;
 
-      let opcode = 0b001101;
+      let opcode{5-1} = 0b11111;
+      let opcode{0} = cond{3};
       let Inst{12-0} = addr;
       let Inst{16-13} = rhs;
       let Inst{20-17} = lhs;
       let Inst{22-21} = size;
-      let Inst{25-23} = cond;
+      let Inst{25-23} = cond{2-0};
     }
   }
 }

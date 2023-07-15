@@ -12,6 +12,7 @@
 
 #include "AccaBaseInfo.h"
 #include "AccaTargetMachine.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
@@ -71,10 +72,31 @@ void AccaDAGToDAGISel::Select(SDNode *Node) {
   // Instruction Selection not handled by the auto-generated tablegen selection
   // should be handled here.
   unsigned Opcode = Node->getOpcode();
+  SDLoc DL(Node);
+  MVT VT = Node->getSimpleValueType(0);
 
   switch (Opcode) {
   default:
     break;
+  case ISD::Constant: {
+    int64_t Val = cast<ConstantSDNode>(Node)->getSExtValue();
+    SDValue Imm = CurDAG->getTargetConstant(Val, DL, MVT::i64);
+    unsigned Opcode = 0;
+    if (VT == MVT::i64) {
+      Opcode = Acca::PseudoLDI_word;
+    } else if (VT == MVT::i32) {
+      Opcode = Acca::PseudoLDI_quadbyte;
+    } else if (VT == MVT::i16) {
+      Opcode = Acca::PseudoLDI_doublebyte;
+    } else if (VT == MVT::i8) {
+      Opcode = Acca::PseudoLDI_byte;
+    } else {
+      llvm_unreachable("Unsupported constant type");
+    }
+    SDNode* Result = CurDAG->getMachineNode(Opcode, DL, VT, Imm);
+    ReplaceNode(Node, Result);
+    return;
+  }
   case ISD::FrameIndex: {
     // select it to `add FI, 0, 0`, which will be lowered to `add rsp, imm, shift` later
     int FI = cast<FrameIndexSDNode>(Node)->getIndex();

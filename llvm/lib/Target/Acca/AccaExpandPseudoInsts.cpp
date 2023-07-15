@@ -14,7 +14,11 @@
 #include "Acca.h"
 #include "AccaInstrInfo.h"
 #include "AccaRegisterInfo.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/TargetOpcodes.h"
+#include "llvm/Support/ErrorHandling.h"
+#include <cstdint>
 #include "AccaBaseInfo.h"
 #include "MCTargetDesc/AccaMCTargetDesc.h"
 
@@ -52,6 +56,10 @@ private:
                           MachineBasicBlock::iterator MBBI,
                           MachineBasicBlock::iterator &NextMBBI,
                           bool IsTailCall);
+  bool expandPseudoLDI(MachineBasicBlock &MBB,
+                       MachineBasicBlock::iterator MBBI,
+                       MachineBasicBlock::iterator &NextMBBI,
+                       MVT ResultType);
 };
 
 char AccaPreRAExpandPseudo::ID = 0;
@@ -86,6 +94,14 @@ bool AccaPreRAExpandPseudo::expandMI(
     return expandFunctionCALL(MBB, MBBI, NextMBBI, /*IsTailCall=*/false);
   case Acca::PseudoTAIL:
     return expandFunctionCALL(MBB, MBBI, NextMBBI, /*IsTailCall=*/true);
+  case Acca::PseudoLDI_byte:
+    return expandPseudoLDI(MBB, MBBI, NextMBBI, MVT::i8);
+  case Acca::PseudoLDI_doublebyte:
+    return expandPseudoLDI(MBB, MBBI, NextMBBI, MVT::i16);
+  case Acca::PseudoLDI_quadbyte:
+    return expandPseudoLDI(MBB, MBBI, NextMBBI, MVT::i32);
+  case Acca::PseudoLDI_word:
+    return expandPseudoLDI(MBB, MBBI, NextMBBI, MVT::i64);
   }
   return false;
 }
@@ -171,6 +187,67 @@ bool AccaPreRAExpandPseudo::expandFunctionCALL(
   CALL.setMIFlags(MI.getFlags());
 
   MI.eraseFromParent();
+  return true;
+}
+
+static bool getSubRegForClass(const TargetRegisterClass *RC,
+                              const TargetRegisterInfo &TRI, unsigned &SubReg) {
+  switch (TRI.getRegSizeInBits(*RC)) {
+  case 8:
+    SubReg = Acca::subreg_byte;
+    break;
+  case 16:
+    SubReg = Acca::subreg_doublebyte;
+    break;
+  case 32:
+    SubReg = Acca::subreg_quadbyte;
+    break;
+  default:
+    return false;
+  }
+
+  return true;
+}
+
+bool AccaPreRAExpandPseudo::expandPseudoLDI(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
+    MachineBasicBlock::iterator &NextMBBI, MVT ResultType) {
+  MachineFunction *MF = MBB.getParent();
+  MachineInstr &MI = *MBBI;
+  DebugLoc DL = MI.getDebugLoc();
+  auto Imm = MI.getOperand(1).getImm();
+
+  Register FinalDstReg = MI.getOperand(0).getReg();
+  Register DstReg = (ResultType == MVT::i64)
+    ? FinalDstReg
+    : MF->getRegInfo().createVirtualRegister(&Acca::I64RegsRegClass);
+
+  TII->movImm(MBB, MBBI, DL, DstReg, static_cast<uint64_t>(Imm), static_cast<MachineInstr::MIFlag>(MI.getFlags()));
+
+  if (ResultType != MVT::i64) {
+    const TargetRegisterClass *RC = nullptr;
+
+    if (ResultType == MVT::i8) {
+      RC = &Acca::I8RegsRegClass;
+    } else if (ResultType == MVT::i16) {
+      RC = &Acca::I16RegsRegClass;
+    } else if (ResultType == MVT::i32) {
+      RC = &Acca::I32RegsRegClass;
+    } else {
+      llvm_unreachable("unexpected result type for PseudoLDI");
+    }
+
+    unsigned SubRegIdx;
+    if (!getSubRegForClass(RC, *MF->getRegInfo().getTargetRegisterInfo(), SubRegIdx)) {
+      llvm_unreachable("failed to find subregister index for class");
+    }
+
+    BuildMI(MBB, MBBI, DL, TII->get(TargetOpcode::COPY), FinalDstReg)
+      .addReg(DstReg, 0, SubRegIdx);
+  }
+
+  MI.eraseFromParent();
+
   return true;
 }
 

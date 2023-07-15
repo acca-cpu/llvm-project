@@ -64,14 +64,16 @@ printCondCode(const MCInst *MI, int opNum, raw_ostream &OS) {
   int64_t CC = MI->getOperand(opNum).getImm();
 
   switch (CC) {
-    case 0: OS << "C" ; break;
-    case 1: OS << "NC"; break;
-    case 2: OS << "Z" ; break;
-    case 3: OS << "NZ"; break;
-    case 4: OS << "O" ; break;
-    case 5: OS << "NO"; break;
-    case 6: OS << "S" ; break;
-    case 7: OS << "NS"; break;
+    case 0: OS << "c" ; break;
+    case 1: OS << "nc"; break;
+    case 2: OS << "z" ; break;
+    case 3: OS << "nz"; break;
+    case 4: OS << "o" ; break;
+    case 5: OS << "no"; break;
+    case 6: OS << "s" ; break;
+    case 7: OS << "ns"; break;
+    case 8: OS << "l" ; break;
+    case 9: OS << "nl"; break;
     default:
       report_fatal_error("Invalid condition code");
       break;

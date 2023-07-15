@@ -56,6 +56,9 @@ namespace llvm {
 
     bool useSoftFloat() const override;
 
+    virtual EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Context,
+                                   EVT VT) const override;
+
   private:
     SDValue LowerZERO_EXTEND(SDValue Op, SelectionDAG &DAG) const;
   };

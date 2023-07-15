@@ -16,8 +16,11 @@
 #ifndef LLVM_LIB_TARGET_ACCA_ACCABASEINFO_H
 #define LLVM_LIB_TARGET_ACCA_ACCABASEINFO_H
 
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/MachineValueType.h"
 #include <cstdint>
+#include <vector>
 namespace llvm {
 // This namespace holds all of the target specific flags that instruction info
 // tracks.

@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include "AccaBaseInfo.h"
+#include "MCTargetDesc/AccaMCTargetDesc.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Support/MathExtras.h"
 #include <cstdint>
