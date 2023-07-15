@@ -81,6 +81,28 @@ AccaTargetLowering::AccaTargetLowering(const TargetMachine &TM, const AccaSubtar
   setOperationAction(ISD::UDIV, MVT::i32, Expand);
   setOperationAction(ISD::UDIV, MVT::i64, Expand);
 
+  // Acca has no MULHS/MULHU
+  setOperationAction(ISD::MULHS, MVT::i8 , Expand);
+  setOperationAction(ISD::MULHS, MVT::i16, Expand);
+  setOperationAction(ISD::MULHS, MVT::i32, Expand);
+  setOperationAction(ISD::MULHS, MVT::i64, Expand);
+
+  setOperationAction(ISD::MULHU, MVT::i8 , Expand);
+  setOperationAction(ISD::MULHU, MVT::i16, Expand);
+  setOperationAction(ISD::MULHU, MVT::i32, Expand);
+  setOperationAction(ISD::MULHU, MVT::i64, Expand);
+
+  // nor does it have UMUL_LOHI/SMUL_LOHI
+  setOperationAction(ISD::UMUL_LOHI, MVT::i8 , Expand);
+  setOperationAction(ISD::UMUL_LOHI, MVT::i16, Expand);
+  setOperationAction(ISD::UMUL_LOHI, MVT::i32, Expand);
+  setOperationAction(ISD::UMUL_LOHI, MVT::i64, Expand);
+
+  setOperationAction(ISD::SMUL_LOHI, MVT::i8 , Expand);
+  setOperationAction(ISD::SMUL_LOHI, MVT::i16, Expand);
+  setOperationAction(ISD::SMUL_LOHI, MVT::i32, Expand);
+  setOperationAction(ISD::SMUL_LOHI, MVT::i64, Expand);
+
   // Acca has no SELECT_CC.
   setOperationAction(ISD::SELECT_CC, MVT::i8 , Expand);
   setOperationAction(ISD::SELECT_CC, MVT::i16, Expand);
