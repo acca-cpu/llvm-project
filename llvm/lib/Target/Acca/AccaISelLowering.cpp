@@ -29,6 +29,7 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
@@ -102,6 +103,18 @@ AccaTargetLowering::AccaTargetLowering(const TargetMachine &TM, const AccaSubtar
   setOperationAction(ISD::SMUL_LOHI, MVT::i16, Expand);
   setOperationAction(ISD::SMUL_LOHI, MVT::i32, Expand);
   setOperationAction(ISD::SMUL_LOHI, MVT::i64, Expand);
+
+  // just expand SIGN_EXTEND_INREG (to avoid having to define a pattern for now)
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8,  Expand);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i32, Expand);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i64, Expand);
+
+  // Acca has no ROTL, only ROTR
+  setOperationAction(ISD::ROTL, MVT::i8,  Expand);
+  setOperationAction(ISD::ROTL, MVT::i16, Expand);
+  setOperationAction(ISD::ROTL, MVT::i32, Expand);
+  setOperationAction(ISD::ROTL, MVT::i64, Expand);
 
   // Acca has no SELECT_CC.
   setOperationAction(ISD::SELECT_CC, MVT::i8 , Expand);
