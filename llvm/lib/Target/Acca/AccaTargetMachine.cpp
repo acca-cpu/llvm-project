@@ -51,6 +51,8 @@ AccaTargetMachine::AccaTargetMachine(const Target &T, const Triple &TT,
       Subtarget(TT, std::string(CPU), std::string(FS), *this)
      {
   initAsmInfo();
+
+  this->Options.TrapUnreachable = true;
 }
 
 AccaTargetMachine::~AccaTargetMachine() = default;

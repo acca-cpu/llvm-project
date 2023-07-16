@@ -430,6 +430,10 @@ let isTerminator = 1, isBarrier = 1 in {
   }
 }
 
+// patterns for trap and debugtrap
+def : Pat<(trap), (UDF)>;
+def : Pat<(debugtrap), (DBG)>;
+
 //
 // exc
 //
