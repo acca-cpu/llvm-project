@@ -72,19 +72,28 @@ defm STP : LoadStore2<0b110000, "stp", 1>;
 
 // single load patterns
 
-def : Pat<(i8 (load I64Regs:$Rb)), (LDS_byte I64Regs:$Rb)>;
+def : Pat<(i8  (load I64Regs:$Rb)), (LDS_byte       I64Regs:$Rb)>;
 def : Pat<(i16 (load I64Regs:$Rb)), (LDS_doublebyte I64Regs:$Rb)>;
-def : Pat<(i32 (load I64Regs:$Rb)), (LDS_quadbyte I64Regs:$Rb)>;
-def : Pat<(i64 (load I64Regs:$Rb)), (LDS_word I64Regs:$Rb)>;
+def : Pat<(i32 (load I64Regs:$Rb)), (LDS_quadbyte   I64Regs:$Rb)>;
+def : Pat<(i64 (load I64Regs:$Rb)), (LDS_word       I64Regs:$Rb)>;
 
 // single load anyext patterns
 
-def : Pat<(i16 (extloadi8 I64Regs:$Rb)), (INSERT_SUBREG (i16 (IMPLICIT_DEF)), (LDS_byte I64Regs:$Rb), subreg_byte)>;
-def : Pat<(i32 (extloadi8 I64Regs:$Rb)), (INSERT_SUBREG (i32 (IMPLICIT_DEF)), (LDS_byte I64Regs:$Rb), subreg_byte)>;
-def : Pat<(i64 (extloadi8 I64Regs:$Rb)), (INSERT_SUBREG (i64 (IMPLICIT_DEF)), (LDS_byte I64Regs:$Rb), subreg_byte)>;
+def : Pat<(i16 (extloadi8  I64Regs:$Rb)), (INSERT_SUBREG (i16 (IMPLICIT_DEF)), (LDS_byte       I64Regs:$Rb), subreg_byte)>;
+def : Pat<(i32 (extloadi8  I64Regs:$Rb)), (INSERT_SUBREG (i32 (IMPLICIT_DEF)), (LDS_byte       I64Regs:$Rb), subreg_byte)>;
+def : Pat<(i64 (extloadi8  I64Regs:$Rb)), (INSERT_SUBREG (i64 (IMPLICIT_DEF)), (LDS_byte       I64Regs:$Rb), subreg_byte)>;
 def : Pat<(i32 (extloadi16 I64Regs:$Rb)), (INSERT_SUBREG (i32 (IMPLICIT_DEF)), (LDS_doublebyte I64Regs:$Rb), subreg_doublebyte)>;
 def : Pat<(i64 (extloadi16 I64Regs:$Rb)), (INSERT_SUBREG (i64 (IMPLICIT_DEF)), (LDS_doublebyte I64Regs:$Rb), subreg_doublebyte)>;
-def : Pat<(i64 (extloadi32 I64Regs:$Rb)), (INSERT_SUBREG (i64 (IMPLICIT_DEF)), (LDS_quadbyte I64Regs:$Rb), subreg_quadbyte)>;
+def : Pat<(i64 (extloadi32 I64Regs:$Rb)), (INSERT_SUBREG (i64 (IMPLICIT_DEF)), (LDS_quadbyte   I64Regs:$Rb), subreg_quadbyte)>;
+
+// single trunc store patterns
+
+def : Pat<(truncstorei8  I16Regs:$Rval, I64Regs:$Raddr), (STS_byte       I64Regs:$Raddr, (EXTRACT_SUBREG I16Regs:$Rval, subreg_byte))>;
+def : Pat<(truncstorei8  I32Regs:$Rval, I64Regs:$Raddr), (STS_byte       I64Regs:$Raddr, (EXTRACT_SUBREG I32Regs:$Rval, subreg_byte))>;
+def : Pat<(truncstorei8  I64Regs:$Rval, I64Regs:$Raddr), (STS_byte       I64Regs:$Raddr, (EXTRACT_SUBREG I64Regs:$Rval, subreg_byte))>;
+def : Pat<(truncstorei16 I32Regs:$Rval, I64Regs:$Raddr), (STS_doublebyte I64Regs:$Raddr, (EXTRACT_SUBREG I32Regs:$Rval, subreg_doublebyte))>;
+def : Pat<(truncstorei16 I64Regs:$Rval, I64Regs:$Raddr), (STS_doublebyte I64Regs:$Raddr, (EXTRACT_SUBREG I64Regs:$Rval, subreg_doublebyte))>;
+def : Pat<(truncstorei32 I64Regs:$Rval, I64Regs:$Raddr), (STS_quadbyte   I64Regs:$Raddr, (EXTRACT_SUBREG I64Regs:$Rval, subreg_quadbyte))>;
 
 //
 // load immediate
@@ -256,17 +265,21 @@ foreach bigsize = 0-3 in {
     defvar bigopsize = !cond(!eq(bigsize, 0) : "byte", !eq(bigsize, 1) : "doublebyte", !eq(bigsize, 2) : "quadbyte", true : "word");
     defvar smallopsize = !cond(!eq(smallsize, 0) : "byte", !eq(smallsize, 1) : "doublebyte", !eq(smallsize, 2) : "quadbyte", true : "word");
     defvar subreg_idx = !cast<SubRegIndex>(!strconcat("subreg_", smallopsize));
+
     defvar shrop_unsigned = !cast<Instruction>(!strconcat("SHR_", bigopsize, "_nonnull_imm_noarith_nosetflags"));
     defvar shrop_signed = !cast<Instruction>(!strconcat("SHR_", bigopsize, "_nonnull_imm_arith_nosetflags"));
     defvar shlop = !cast<Instruction>(!strconcat("SHL_", bigopsize, "_nonnull_imm_noarith_nosetflags"));
+    defvar ldsop = !cast<Instruction>(!strconcat("LDS_", bigopsize));
+    defvar sextloadpat = !cast<PatFrag>("sextloadi" # smallbits);
+    defvar zextloadpat = !cast<PatFrag>("zextloadi" # smallbits);
+
     def : Pat<(bigvalsize (sext smallclass:$val)),
               (shrop_signed
                 (shlop
                   (INSERT_SUBREG
                     (bigvalsize (IMPLICIT_DEF)),
                     smallclass:$val,
-                    subreg_idx
-                  ),
+                    subreg_idx),
                   smallbits),
                 smallbits)>;
     def : Pat<(bigvalsize (zext smallclass:$val)),
@@ -275,8 +288,27 @@ foreach bigsize = 0-3 in {
                   (INSERT_SUBREG
                     (bigvalsize (IMPLICIT_DEF)),
                     smallclass:$val,
-                    subreg_idx
-                  ),
+                    subreg_idx),
+                  smallbits),
+                smallbits)>;
+
+    // single load sext/zext patterns
+    def : Pat<(bigvalsize (sextloadpat I64Regs:$Raddr)),
+              (shrop_signed
+                (shlop
+                  (INSERT_SUBREG
+                    (bigvalsize (IMPLICIT_DEF)),
+                    (ldsop I64Regs:$Raddr),
+                    subreg_idx),
+                  smallbits),
+                smallbits)>;
+    def : Pat<(bigvalsize (zextloadpat I64Regs:$Raddr)),
+              (shrop_unsigned
+                (shlop
+                  (INSERT_SUBREG
+                    (bigvalsize (IMPLICIT_DEF)),
+                    (ldsop I64Regs:$Raddr),
+                    subreg_idx),
                   smallbits),
                 smallbits)>;
   }
