@@ -19,9 +19,11 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
+#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "AccaBaseInfo.h"
@@ -171,6 +173,8 @@ void AccaInstrInfo::
 copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
             const DebugLoc &DL, MCRegister DestReg, MCRegister SrcReg,
             bool KillSrc) const {
+  MachineRegisterInfo& MRI = MBB.getParent()->getRegInfo();
+
   if (Acca::CCRRegClass.contains(DestReg) &&
       Acca::CCRRegClass.contains(SrcReg)) {
     llvm_unreachable("Unexpected CCR register copy");
@@ -178,30 +182,49 @@ copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
 
   {
     unsigned Opcode = Acca::INSTRUCTION_LIST_END;
+    unsigned SrcBits = MRI.getTargetRegisterInfo()->getRegSizeInBits(SrcReg, MRI);
+    unsigned DestBits = MRI.getTargetRegisterInfo()->getRegSizeInBits(DestReg, MRI);
+    unsigned DestSubreg = Acca::NoSubRegister;
+    // DestReg may be smaller than SrcReg, but Acca only supports symmetric register copies.
+    // so, just copy to the equivalent super-register. since we're only called post-RA, we can
+    // safely do so.
+    MCRegister ActualDestReg = DestReg;
 
-    if (Acca::I8RegsRegClass.contains(DestReg) &&
-        Acca::I8RegsRegClass.contains(SrcReg)) {
-      Opcode = Acca::COPY_byte;
-    }
-
-    if (Acca::I16RegsRegClass.contains(DestReg) &&
-        Acca::I16RegsRegClass.contains(SrcReg)) {
-      Opcode = Acca::COPY_doublebyte;
-    }
-
-    if (Acca::I32RegsRegClass.contains(DestReg) &&
-        Acca::I32RegsRegClass.contains(SrcReg)) {
-      Opcode = Acca::COPY_quadbyte;
-    }
-
-    if (Acca::I64RegsRegClass.contains(DestReg) &&
-        Acca::I64RegsRegClass.contains(SrcReg)) {
-      Opcode = Acca::COPY_word;
+    if (DestBits <= SrcBits) {
+      const TargetRegisterClass* SuperRegClass = nullptr;
+      if (SrcBits == 8) {
+        Opcode = Acca::COPY_byte;
+        SuperRegClass = &Acca::I8RegsRegClass;
+      } else if (SrcBits == 16) {
+        Opcode = Acca::COPY_doublebyte;
+        SuperRegClass = &Acca::I16RegsRegClass;
+      } else if (SrcBits == 32) {
+        Opcode = Acca::COPY_quadbyte;
+        SuperRegClass = &Acca::I32RegsRegClass;
+      } else if (SrcBits == 64) {
+        Opcode = Acca::COPY_word;
+        SuperRegClass = &Acca::I64RegsRegClass;
+      }
+      if (DestBits < SrcBits) {
+        if (DestBits == 8) {
+          DestSubreg = Acca::subreg_byte;
+        } else if (DestBits == 16) {
+          DestSubreg = Acca::subreg_doublebyte;
+        } else if (DestBits == 32) {
+          DestSubreg = Acca::subreg_quadbyte;
+        }
+        ActualDestReg = MRI.getTargetRegisterInfo()->getMatchingSuperReg(DestReg, DestSubreg, SuperRegClass);
+      }
     }
 
     if (Opcode != Acca::INSTRUCTION_LIST_END) {
-      BuildMI(MBB, I, DL, get(Opcode), DestReg)
+      BuildMI(MBB, I, DL, get(Opcode), ActualDestReg)
         .addReg(SrcReg, getKillRegState(KillSrc));
+      if (ActualDestReg != DestReg) {
+        BuildMI(MBB, I, DL, get(Acca::KILL))
+          .addReg(DestReg, RegState::Define)
+          .addReg(ActualDestReg, RegState::Kill);
+      }
       return;
     }
   }
