@@ -12,6 +12,8 @@
 
 //#include "MCTargetDesc/AccaFixupKinds.h"
 //#include "AccaMCExpr.h"
+#include "AccaFixupKinds.h"
+#include "AccaMCExpr.h"
 #include "AccaMCTargetDesc.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
@@ -38,6 +40,8 @@
 using namespace llvm;
 
 #define DEBUG_TYPE "mccodeemitter"
+
+STATISTIC(MCNumEmitted, "Number of MC instructions emitted.");
 
 namespace {
 
@@ -69,6 +73,9 @@ public:
   unsigned getShiftedImmOpValue(const MCInst &MI, unsigned OpNo,
                             SmallVectorImpl<MCFixup> &Fixups,
                             const MCSubtargetInfo &STI) const;
+  unsigned getExprOpValue(const MCInst &MI, const MCOperand &MO,
+                          SmallVectorImpl<MCFixup> &Fixups,
+                          const MCSubtargetInfo &STI) const;
 };
 
 } // end anonymous namespace
@@ -77,14 +84,87 @@ void AccaMCCodeEmitter::
 encodeInstruction(const MCInst &MI, raw_ostream &OS,
                   SmallVectorImpl<MCFixup> &Fixups,
                   const MCSubtargetInfo &STI) const {
-  llvm_unreachable("unimplemented");
+  uint64_t Binary = getBinaryCodeForInstr(MI, Fixups, STI);
+  support::endian::write<uint32_t>(OS, Binary, support::little);
+  ++MCNumEmitted; // Keep track of the # of mi's emitted.
 };
 
 unsigned AccaMCCodeEmitter::
 getMachineOpValue(const MCInst &MI, const MCOperand &MO,
                   SmallVectorImpl<MCFixup> &Fixups,
                   const MCSubtargetInfo &STI) const {
-  llvm_unreachable("unimplemented");
+  if (MO.isReg())
+    return Ctx.getRegisterInfo()->getEncodingValue(MO.getReg());
+
+  if (MO.isImm())
+    return static_cast<unsigned>(MO.getImm());
+
+  // MO must be an Expr.
+  assert(MO.isExpr());
+  return getExprOpValue(MI, MO, Fixups, STI);
+};
+
+unsigned
+AccaMCCodeEmitter::getExprOpValue(const MCInst &MI, const MCOperand &MO,
+                                  SmallVectorImpl<MCFixup> &Fixups,
+                                  const MCSubtargetInfo &STI) const {
+  assert(MO.isExpr() && "getExprOpValue expects only expressions");
+  const MCExpr *Expr = MO.getExpr();
+  MCExpr::ExprKind Kind = Expr->getKind();
+  Acca::Fixups FixupKind = Acca::fixup_acca_invalid;
+
+  if (Kind == MCExpr::Target) {
+    const AccaMCExpr *AccaExpr = cast<AccaMCExpr>(Expr);
+
+    switch (AccaExpr->getKind()) {
+    case AccaMCExpr::VK_NONE:
+    case AccaMCExpr::VK_INVALID:
+    case AccaMCExpr::VK_ABS:
+      llvm_unreachable("Unhandled fixup kind!");
+    case AccaMCExpr::VK_CALL:
+    case AccaMCExpr::VK_CALL_PLT:
+      FixupKind = Acca::fixup_acca_rel22;
+      break;
+    case AccaMCExpr::VK_REL64_D0:
+      FixupKind = Acca::fixup_acca_rel64_d0;
+      break;
+    case AccaMCExpr::VK_REL64_D1:
+      FixupKind = Acca::fixup_acca_rel64_d1;
+      break;
+    case AccaMCExpr::VK_REL64_D2:
+      FixupKind = Acca::fixup_acca_rel64_d2;
+      break;
+    case AccaMCExpr::VK_REL64_D3:
+      FixupKind = Acca::fixup_acca_rel64_d3;
+      break;
+    }
+  } else if (Kind == MCExpr::SymbolRef &&
+             cast<MCSymbolRefExpr>(Expr)->getKind() ==
+                 MCSymbolRefExpr::VK_None) {
+    switch (MI.getOpcode()) {
+    default:
+      break;
+    case Acca::CALL_immrel_cond:
+    case Acca::CALL_immrel_nocond:
+    case Acca::JMP_immrel_cond:
+    case Acca::JMP_immrel_nocond:
+      FixupKind = Acca::fixup_acca_rel22;
+      break;
+    case Acca::CJMP_byte_immrel:
+    case Acca::CJMP_doublebyte_immrel:
+    case Acca::CJMP_quadbyte_immrel:
+    case Acca::CJMP_word_immrel:
+      FixupKind = Acca::fixup_acca_rel13;
+      break;
+    }
+  }
+
+  assert(FixupKind != Acca::fixup_acca_invalid &&
+         "Unhandled expression!");
+
+  Fixups.push_back(
+      MCFixup::create(0, Expr, MCFixupKind(FixupKind), MI.getLoc()));
+  return 0;
 };
 
 #include "AccaGenMCCodeEmitter.inc"

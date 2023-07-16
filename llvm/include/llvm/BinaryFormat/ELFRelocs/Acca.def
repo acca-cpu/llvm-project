@@ -2,5 +2,11 @@
 #error "ELF_RELOC must be defined"
 #endif
 
-ELF_RELOC(R_ACCA_NONE,  0)
-ELF_RELOC(R_ACCA_REL22, 1)
+ELF_RELOC(R_ACCA_NONE,                         0)
+ELF_RELOC(R_ACCA_REL22,                        1)
+ELF_RELOC(R_ACCA_REL13,                        2)
+ELF_RELOC(R_ACCA_REL64_D0,                     3)
+ELF_RELOC(R_ACCA_REL64_D1,                     4)
+ELF_RELOC(R_ACCA_REL64_D2,                     5)
+ELF_RELOC(R_ACCA_REL64_D3,                     6)
+ELF_RELOC(R_ACCA_REL22_BYTE,                   7)

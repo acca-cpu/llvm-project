@@ -58,7 +58,7 @@ void AccaMCExpr::visitUsedExpr(MCStreamer &Streamer) const {
 }
 
 MCFragment *AccaMCExpr::findAssociatedFragment() const {
-  llvm_unreachable("unimplemented");
+  return getSubExpr()->findAssociatedFragment();
 }
 
 bool AccaMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
@@ -74,6 +74,10 @@ bool AccaMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
 }
 
 void AccaMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
-  llvm_unreachable("unimplemented");
+  switch (getKind()) {
+  default:
+    return;
+  // TODO: once we have TLS support in Acca, we'll need to introduce relocs for this
+  }
 }
 
