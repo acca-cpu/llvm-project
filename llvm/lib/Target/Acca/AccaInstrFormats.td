@@ -7,7 +7,9 @@
 //===----------------------------------------------------------------------===//
 
 class AccaInst<dag outs, dag ins, string asmstr, list<dag> pattern, InstrItinClass itin = NoItinerary> : Instruction {
-  field bits<32> Inst;
+  // According to the Acca spec, unspecified bits must be 0
+  // (future instructions may use those bits)
+  field bits<32> Inst = 0;
 
   let Namespace = "Acca";
   let Size = 4;
