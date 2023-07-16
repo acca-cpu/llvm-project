@@ -63,50 +63,62 @@ def TImm64Operand : TImm<64>;
 
 def uimm2 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= 0 && Imm < 4; }]> {
   let ParserMatchClass = UImm2Operand;
+  let DecoderMethod = "decodeUImmOperand<2>";
 }
 
 def uimm3 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= 0 && Imm < 8; }]> {
   let ParserMatchClass = UImm3Operand;
+  let DecoderMethod = "decodeUImmOperand<3>";
 }
 
 def uimm6 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= 0 && Imm < 64; }]> {
   let ParserMatchClass = UImm6Operand;
+  let DecoderMethod = "decodeUImmOperand<6>";
 }
 
 def uimm7 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= 0 && Imm < 128; }]> {
   let ParserMatchClass = UImm7Operand;
+  let DecoderMethod = "decodeUImmOperand<7>";
 }
 
 def uimm11 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= 0 && Imm < 2048; }]> {
   let ParserMatchClass = UImm11Operand;
+  let DecoderMethod = "decodeUImmOperand<11>";
 }
 
 def uimm16 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= 0 && Imm < 65536; }]> {
   let ParserMatchClass = UImm16Operand;
+  let DecoderMethod = "decodeUImmOperand<16>";
 }
 
 def uimm22 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= 0 && Imm < 4194304; }]> {
   let ParserMatchClass = UImm22Operand;
+  let DecoderMethod = "decodeUImmOperand<22>";
 }
 
 def simm13 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= -4096 && Imm < 4096; }]> {
   let ParserMatchClass = SImm13Operand;
+  let DecoderMethod = "decodeSImmOperand<13>";
 }
 
 def simm13_br : Operand<OtherVT> {
   let ParserMatchClass = SImm13Operand;
+  let DecoderMethod = "decodeSImmOperand<13>";
 }
 
 def simm22 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= -2097152 && Imm < 2097152; }]> {
   let ParserMatchClass = SImm22Operand;
+  let DecoderMethod = "decodeSImmOperand<22>";
 }
 
 def simm22_br : Operand<OtherVT> {
   let ParserMatchClass = SImm22Operand;
+  let DecoderMethod = "decodeSImmOperand<22>";
 }
 
 def simm22_symbol : Operand<i64> {
   let ParserMatchClass = SImm22Operand;
+  let DecoderMethod = "decodeSImmOperand<22>";
 }
 
 def timm64 : Operand<i64>, TImmLeaf<i64, [{ return true; }]> {

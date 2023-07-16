@@ -74,8 +74,6 @@ printCondCode(const MCInst *MI, int opNum, raw_ostream &OS) {
     case 7: OS << "ns"; break;
     case 8: OS << "l" ; break;
     case 9: OS << "nl"; break;
-    default:
-      report_fatal_error("Invalid condition code");
-      break;
+    default: OS << "<unknown>"; break;
   }
 };
