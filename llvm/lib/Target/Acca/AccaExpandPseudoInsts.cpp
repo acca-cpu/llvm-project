@@ -16,6 +16,7 @@
 #include "AccaRegisterInfo.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <cstdint>
@@ -144,18 +145,24 @@ bool AccaPreRAExpandPseudo::expandFunctionCALL(
     // jmpr $scratch
     Opcode =
         IsTailCall ? Acca::PseudoJMPREGREL_TAIL : Acca::PseudoCALLREGREL;
-    Register ScratchReg = MF->getRegInfo()
+    Register ScratchReg0 = MF->getRegInfo()
+      .createVirtualRegister(&Acca::I64RegsRegClass);
+    Register ScratchReg1 = MF->getRegInfo()
+      .createVirtualRegister(&Acca::I64RegsRegClass);
+    Register ScratchReg2 = MF->getRegInfo()
+      .createVirtualRegister(&Acca::I64RegsRegClass);
+    Register ScratchReg3 = MF->getRegInfo()
       .createVirtualRegister(&Acca::I64RegsRegClass);
     MachineInstrBuilder DB0 = BuildMI(MBB, MBBI, DL,
                                       TII->get(Acca::LDI_noshift_clearall),
-                                      ScratchReg);
+                                      ScratchReg0);
     MachineInstrBuilder DB1 = BuildMI(MBB, MBBI, DL,
-                                      TII->get(Acca::LDI), ScratchReg);
+                                      TII->get(Acca::LDI), ScratchReg1).addReg(ScratchReg0, RegState::ImplicitKill);
     MachineInstrBuilder DB2 = BuildMI(MBB, MBBI, DL,
-                                      TII->get(Acca::LDI), ScratchReg);
+                                      TII->get(Acca::LDI), ScratchReg2).addReg(ScratchReg1, RegState::ImplicitKill);
     MachineInstrBuilder DB3 = BuildMI(MBB, MBBI, DL,
-                                      TII->get(Acca::LDI), ScratchReg);
-    CALL = BuildMI(MBB, MBBI, DL, TII->get(Opcode)).addReg(ScratchReg);
+                                      TII->get(Acca::LDI), ScratchReg3).addReg(ScratchReg2, RegState::ImplicitKill);
+    CALL = BuildMI(MBB, MBBI, DL, TII->get(Opcode)).addReg(ScratchReg3);
     if (Func.isSymbol()) {
       const char *FnName = Func.getSymbolName();
       DB0.addExternalSymbol(FnName, AccaII::MO_REL64_D0);

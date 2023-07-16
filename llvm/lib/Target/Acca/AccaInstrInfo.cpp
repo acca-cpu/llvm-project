@@ -299,37 +299,45 @@ void AccaInstrInfo::movImm(MachineBasicBlock &MBB,
   //       accepts arbitrary shifts to load 16-bits anywhere, so we can check
   //       if the value would fit into 16 bits shifted and use that instead.
 
-  BuildMI(MBB, MBBI, DL, get(Acca::LDI_noshift_clearall), DstReg)
-    .addImm(Val & 0xffff)
-    .setMIFlag(Flag);
+  MachineRegisterInfo &MRI = MBB.getParent()->getRegInfo();
 
-  if (isUInt<16>(Val)) {
-    return;
+  Register PrevReg;
+
+  // FIXME: this whole virtual register dance is required to preserve SSA form.
+  //        however, i'm not sure if it's actually guaranteed that a destination
+  //        register of the same class as a killed register will be assigned to the
+  //        killed register. from initial testing, it seems to be true, but i
+  //        would prefer something more concrete.
+  //
+  //        really, we should just emit a pseudo-instr (PseudoLDI) and change that
+  //        instr to be expanded during MCInstLower. the current code is temporary.
+
+  for (uint8_t DoubleBytes = 0; DoubleBytes < 4; ++DoubleBytes) {
+    Register ThisDstReg = DstReg;
+    bool FitsInImm = isUInt<16>(Val);
+
+    if (!FitsInImm) {
+      ThisDstReg = MRI.createVirtualRegister(&Acca::I64RegsRegClass);
+    }
+
+    if (DoubleBytes == 0) {
+      BuildMI(MBB, MBBI, DL, get(Acca::LDI_noshift_clearall), ThisDstReg)
+        .addImm(Val & 0xffff)
+        .setMIFlag(Flag);
+    } else {
+      BuildMI(MBB, MBBI, DL, get(Acca::LDI), ThisDstReg)
+        .addImm(Val & 0xffff)
+        .addImm(DoubleBytes * 16)
+        .addImm(0)
+        .addReg(PrevReg, RegState::ImplicitKill)
+        .setMIFlag(Flag);
+    }
+
+    PrevReg = ThisDstReg;
+    Val >>= 16;
+
+    if (FitsInImm) {
+      break;
+    }
   }
-
-  BuildMI(MBB, MBBI, DL, get(Acca::LDI), DstReg)
-    .addImm((Val >> 16) & 0xffff)
-    .addImm(16)
-    .addImm(0)
-    .setMIFlag(Flag);
-
-  if (isUInt<32>(Val)) {
-    return;
-  }
-
-  BuildMI(MBB, MBBI, DL, get(Acca::LDI), DstReg)
-    .addImm((Val >> 32) & 0xffff)
-    .addImm(32)
-    .addImm(0)
-    .setMIFlag(Flag);
-
-  if (isUInt<48>(Val)) {
-    return;
-  }
-
-  BuildMI(MBB, MBBI, DL, get(Acca::LDI), DstReg)
-    .addImm((Val >> 48) & 0xffff)
-    .addImm(48)
-    .addImm(0)
-    .setMIFlag(Flag);
 };
