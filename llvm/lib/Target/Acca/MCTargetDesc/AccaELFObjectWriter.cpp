@@ -48,17 +48,19 @@ getRelocType(MCContext &Ctx, const MCValue &Target,
   switch (Kind) {
   default:
     Ctx.reportError(Fixup.getLoc(), "Unsupported relocation type");
-    return ELF::R_LARCH_NONE;
+    return ELF::R_ACCA_NONE;
   case FK_Data_1:
     Ctx.reportError(Fixup.getLoc(), "1-byte data relocations not supported");
-    return ELF::R_LARCH_NONE;
+    return ELF::R_ACCA_NONE;
   case FK_Data_2:
     Ctx.reportError(Fixup.getLoc(), "2-byte data relocations not supported");
-    return ELF::R_LARCH_NONE;
+    return ELF::R_ACCA_NONE;
   case FK_Data_4:
-    return IsPCRel ? ELF::R_LARCH_32_PCREL : ELF::R_LARCH_32;
+    Ctx.reportError(Fixup.getLoc(), "4-byte data relocations not supported");
+    return ELF::R_ACCA_NONE;
   case FK_Data_8:
-    return ELF::R_LARCH_64;
+    Ctx.reportError(Fixup.getLoc(), "8-byte data relocations not supported");
+    return ELF::R_ACCA_NONE;
   case Acca::fixup_acca_rel22:
     return ELF::R_ACCA_REL22;
   case Acca::fixup_acca_rel13:

@@ -196,7 +196,7 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
       reportOutOfRangeError(Ctx, Fixup.getLoc(), 24);
     if (Value % 4)
       Ctx.reportError(Fixup.getLoc(), "fixup value must be 4-byte aligned");
-    return (Value >> 2) & 0x3fffff;
+    return static_cast<int64_t>(Value >> 2) & 0x3fffff;
   }
   case Acca::fixup_acca_rel13: {
     Value -= 4;
@@ -204,16 +204,16 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
       reportOutOfRangeError(Ctx, Fixup.getLoc(), 15);
     if (Value % 4)
       Ctx.reportError(Fixup.getLoc(), "fixup value must be 4-byte aligned");
-    return (Value >> 2) & 0x1fff;
+    return static_cast<int64_t>(Value >> 2) & 0x1fff;
   }
   case Acca::fixup_acca_rel64_d0:
-    return (Value - 4) & 0xffff;
+    return (static_cast<int64_t>(Value - 4) >> 2) & 0xffff;
   case Acca::fixup_acca_rel64_d1:
-    return ((Value - 4) >> 16) & 0xffff;
+    return ((static_cast<int64_t>(Value - 4) >> 2) >> 16) & 0xffff;
   case Acca::fixup_acca_rel64_d2:
-    return ((Value - 4) >> 32) & 0xffff;
+    return ((static_cast<int64_t>(Value - 4) >> 2) >> 32) & 0xffff;
   case Acca::fixup_acca_rel64_d3:
-    return ((Value - 4) >> 48) & 0xffff;
+    return ((static_cast<int64_t>(Value - 4) >> 2) >> 48) & 0xffff;
   case Acca::fixup_acca_rel22_byte: {
     if (!isInt<22>(Value))
       reportOutOfRangeError(Ctx, Fixup.getLoc(), 22);
