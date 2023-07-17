@@ -59,6 +59,10 @@ namespace llvm {
     virtual EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Context,
                                    EVT VT) const override;
 
+    std::pair<unsigned, const TargetRegisterClass *>
+    getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
+                                 StringRef Constraint, MVT VT) const override;
+
   private:
     SDValue LowerZERO_EXTEND(SDValue Op, SelectionDAG &DAG) const;
   };

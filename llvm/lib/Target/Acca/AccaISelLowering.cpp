@@ -602,3 +602,28 @@ getSetCCResultType(const DataLayout &DL, LLVMContext &Context, EVT VT) const {
   // Acca's SETCC equivalent returns a result of the same type as its operands
   return VT;
 };
+
+std::pair<unsigned, const TargetRegisterClass *> AccaTargetLowering::
+getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
+  StringRef Constraint, MVT VT) const {
+  if (Constraint.size() == 1) {
+    switch (Constraint[0]) {
+    case 'r':
+      if (VT.isVector())
+        break;
+      if (VT == MVT::i8)
+        return std::make_pair(0U, &Acca::I8RegsRegClass);
+      if (VT == MVT::i16)
+        return std::make_pair(0U, &Acca::I16RegsRegClass);
+      if (VT == MVT::i32)
+        return std::make_pair(0U, &Acca::I32RegsRegClass);
+      if (VT == MVT::i64 || VT == MVT::Other)
+        return std::make_pair(0U, &Acca::I64RegsRegClass);
+      break;
+    default:
+      break;
+    }
+  }
+
+  return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
+};
