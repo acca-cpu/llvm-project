@@ -73,7 +73,6 @@ class AccaAsmPrinter : public AsmPrinter {
   AccaMCInstLower MCInstLowering;
   FaultMaps FM;
   const AccaSubtarget *STI;
-  bool ShouldEmitWeakSwiftAsyncExtendedFramePointerFlags = false;
 
 public:
   AccaAsmPrinter(TargetMachine &TM, std::unique_ptr<MCStreamer> Streamer)
@@ -87,6 +86,11 @@ public:
   bool lowerOperand(const MachineOperand &MO, MCOperand &MCOp) const {
     return MCInstLowering.lowerOperand(MO, MCOp);
   }
+
+  bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
+                       const char *ExtraCode, raw_ostream &OS) override;
+  bool PrintAsmMemoryOperand(const MachineInstr *MI, unsigned OpNo,
+                             const char *ExtraCode, raw_ostream &OS) override;
 
   /// tblgen'erated driver function for lowering simple MI->MC
   /// pseudo instructions.
@@ -133,6 +137,54 @@ void AccaAsmPrinter::emitInstruction(const MachineInstr *MI) {
   MCInst TmpInst;
   MCInstLowering.Lower(MI, TmpInst);
   EmitToStreamer(*OutStreamer, TmpInst);
+}
+
+bool AccaAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
+                                          const char *ExtraCode,
+                                          raw_ostream &OS) {
+  // First try the generic code, which knows about modifiers like 'c' and 'n'.
+  if (!AsmPrinter::PrintAsmOperand(MI, OpNo, ExtraCode, OS))
+    return false;
+
+  const MachineOperand &MO = MI->getOperand(OpNo);
+  if (ExtraCode && ExtraCode[0]) {
+    if (ExtraCode[1] != 0)
+      return true; // Unknown modifier.
+
+    switch (ExtraCode[0]) {
+    default:
+      return true; // Unknown modifier.
+      // TODO: handle other extra codes if any.
+    }
+  }
+
+  switch (MO.getType()) {
+  case MachineOperand::MO_Immediate:
+    OS << MO.getImm();
+    return false;
+  case MachineOperand::MO_Register:
+    OS << AccaInstPrinter::getRegisterName(MO.getReg());
+    return false;
+  case MachineOperand::MO_GlobalAddress:
+    PrintSymbolOperand(MO, OS);
+    return false;
+  default:
+    llvm_unreachable("not implemented");
+  }
+
+  return true;
+}
+
+bool AccaAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
+                                                unsigned OpNo,
+                                                const char *ExtraCode,
+                                                raw_ostream &OS) {
+  // TODO: handle extra code.
+  if (ExtraCode)
+    return true;
+
+  // TODO
+  return true;
 }
 
 // Force static initialization.
