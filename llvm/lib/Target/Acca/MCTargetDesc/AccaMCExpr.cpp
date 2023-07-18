@@ -41,6 +41,16 @@ StringRef AccaMCExpr::getVariantKindName() const {
   }
 }
 
+AccaMCExpr::VariantKind AccaMCExpr::getVariantKindForName(StringRef name) {
+  return StringSwitch<AccaMCExpr::VariantKind>(name)
+    .Case("plt", VK_CALL_PLT)
+    .Case("rel64_d0", VK_REL64_D0)
+    .Case("rel64_d1", VK_REL64_D1)
+    .Case("rel64_d2", VK_REL64_D2)
+    .Case("rel64_d3", VK_REL64_D3)
+    .Default(VK_INVALID);
+};
+
 void AccaMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
   VariantKind Kind = getKind();
   bool HasVariant =

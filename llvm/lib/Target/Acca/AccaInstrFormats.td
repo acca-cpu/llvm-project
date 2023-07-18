@@ -32,19 +32,22 @@ class AccaInst<dag outs, dag ins, string asmstr, list<dag> pattern, InstrItinCla
 // assembly operands
 //
 
-class UImm<int width> : AsmOperandClass {
-  let Name = "UImm" # width;
-  let DiagnosticType = "InvalidUImm" # width;
+class UImm<int width, string suffix = ""> : AsmOperandClass {
+  let Name = "UImm" # width # suffix;
+  let DiagnosticType = "InvalidUImm" # width # suffix;
+  let RenderMethod = "addImmOperands";
 }
 
-class SImm<int width> : AsmOperandClass {
-  let Name = "SImm" # width;
-  let DiagnosticType = "InvalidSImm" # width;
+class SImm<int width, string suffix = ""> : AsmOperandClass {
+  let Name = "SImm" # width # suffix;
+  let DiagnosticType = "InvalidSImm" # width # suffix;
+  let RenderMethod = "addImmOperands";
 }
 
-class TImm<int width> : AsmOperandClass {
-  let Name = "TImm" # width;
-  let DiagnosticType = "InvalidTImm" # width;
+class TImm<int width, string suffix = ""> : AsmOperandClass {
+  let Name = "TImm" # width # suffix;
+  let DiagnosticType = "InvalidTImm" # width # suffix;
+  let RenderMethod = "addImmOperands";
 }
 
 def UImm2Operand : UImm<2>;
@@ -57,7 +60,15 @@ def UImm16Operand : UImm<16>;
 def UImm22Operand : UImm<22>;
 
 def SImm13Operand : SImm<13>;
+def SImm13BROperand : SImm<13, "BR"> {
+  let PredicateMethod = "isSImm13BROperand";
+  let ParserMethod = "parseSImmBROperand";
+}
 def SImm22Operand : SImm<22>;
+def SImm22BROperand : SImm<22, "BR"> {
+  let PredicateMethod = "isSImm22BROperand";
+  let ParserMethod = "parseSImmBROperand";
+}
 
 def TImm64Operand : TImm<64>;
 
@@ -102,7 +113,7 @@ def simm13 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= -4096 && Imm < 4096; }]
 }
 
 def simm13_br : Operand<OtherVT> {
-  let ParserMatchClass = SImm13Operand;
+  let ParserMatchClass = SImm13BROperand;
   let DecoderMethod = "decodeSImmOperand<13>";
 }
 
@@ -112,12 +123,12 @@ def simm22 : Operand<i64>, ImmLeaf<i64, [{ return Imm >= -2097152 && Imm < 20971
 }
 
 def simm22_br : Operand<OtherVT> {
-  let ParserMatchClass = SImm22Operand;
+  let ParserMatchClass = SImm22BROperand;
   let DecoderMethod = "decodeSImmOperand<22>";
 }
 
 def simm22_symbol : Operand<i64> {
-  let ParserMatchClass = SImm22Operand;
+  let ParserMatchClass = SImm22BROperand;
   let DecoderMethod = "decodeSImmOperand<22>";
 }
 
@@ -128,6 +139,7 @@ def timm64 : Operand<i64>, TImmLeaf<i64, [{ return true; }]> {
 def CondCode : AsmOperandClass {
   let Name = "CondCode";
   let DiagnosticType = "InvalidCondCode";
+  let RenderMethod = "addImmOperands";
 }
 
 // 4-bit immediate

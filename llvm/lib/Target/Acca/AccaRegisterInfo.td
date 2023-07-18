@@ -24,14 +24,14 @@ let Namespace = "Acca" in {
 
 foreach i = 0-15 in {
   def R#i#B : AccaReg<i, "r"#i#"b", !cond(
-    !eq(i, 13) : ["r13b", "rfpb"],
+    !eq(i, 13) : ["r13b", "rspb"],
     !eq(i, 14) : ["r14b", "rfpb"],
     !eq(i, 15) : ["r15b", "rlrb"],
     true : []
   )>, DwarfRegNum<[i]>;
 
   def R#i#D : AccaReg<i, "r"#i#"d", !cond(
-    !eq(i, 13) : ["r13d", "rfpd"],
+    !eq(i, 13) : ["r13d", "rspd"],
     !eq(i, 14) : ["r14d", "rfpd"],
     !eq(i, 15) : ["r15d", "rlrd"],
     true : []
@@ -41,7 +41,7 @@ foreach i = 0-15 in {
   }
 
   def R#i#Q : AccaReg<i, "r"#i#"q", !cond(
-    !eq(i, 13) : ["r13q", "rfpq"],
+    !eq(i, 13) : ["r13q", "rspq"],
     !eq(i, 14) : ["r14q", "rfpq"],
     !eq(i, 15) : ["r15q", "rlrq"],
     true : []
@@ -51,7 +51,7 @@ foreach i = 0-15 in {
   }
 
   def R#i : AccaReg<i, "r"#i, !cond(
-    !eq(i, 13) : ["r13w", "rfp", "rfpw"],
+    !eq(i, 13) : ["r13w", "rsp", "rspw"],
     !eq(i, 14) : ["r14w", "rfp", "rfpw"],
     !eq(i, 15) : ["r15w", "rlr", "rlrw"],
     true : ["r"#i#"w"]

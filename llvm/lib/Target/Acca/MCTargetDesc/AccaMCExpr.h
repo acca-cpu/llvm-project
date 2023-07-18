@@ -64,6 +64,8 @@ public:
   }
 
   static bool classof(const AccaMCExpr *) { return true; }
+
+  static VariantKind getVariantKindForName(StringRef name);
 };
 } // end namespace llvm
 

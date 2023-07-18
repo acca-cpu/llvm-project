@@ -37,6 +37,10 @@ def : Proc<"generic", []>;
 // Assembly parser
 //===----------------------------------------------------------------------===//
 
+def GenericAsmParser : AsmParser {
+  let ShouldEmitMatchRegisterAltName = 1;
+}
+
 def GenericAsmParserVariant : AsmParserVariant {
   int Variant = 0;
   string Name = "generic";
@@ -49,6 +53,7 @@ def GenericAsmParserVariant : AsmParserVariant {
 
 def Acca : Target {
   let InstructionSet = AccaInstrInfo;
+  let AssemblyParsers = [GenericAsmParser];
   let AssemblyParserVariants = [GenericAsmParserVariant];
 }
 
