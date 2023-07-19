@@ -20,7 +20,7 @@
 #include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <cstdint>
-#include "AccaBaseInfo.h"
+#include "MCTargetDesc/AccaBaseInfo.h"
 #include "MCTargetDesc/AccaMCTargetDesc.h"
 
 using namespace llvm;

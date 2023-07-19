@@ -10,7 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "AccaBaseInfo.h"
+#include "MCTargetDesc/AccaBaseInfo.h"
 #include "AccaTargetMachine.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -49,6 +49,9 @@ public:
   }
 
   void Select(SDNode *N) override;
+
+  bool SelectInlineAsmMemoryOperand(const SDValue &Op, unsigned ConstraintID,
+                                    std::vector<SDValue> &OutOps) override;
 
   // Complex Pattern Selectors.
   bool SelectShiftedImm(SDValue N, SDValue &Base, SDValue &Shift);
@@ -126,6 +129,13 @@ bool AccaDAGToDAGISel::SelectShiftedImm(SDValue N, SDValue &Base, SDValue &Shift
   Base = CurDAG->getTargetConstant(Imm, DL, MVT::i16);
   Shift = CurDAG->getTargetConstant(ShiftFactorImm, DL, MVT::i4);
   return true;
+};
+
+bool AccaDAGToDAGISel::
+SelectInlineAsmMemoryOperand(const SDValue &Op, unsigned ConstraintID,
+                             std::vector<SDValue> &OutOps) {
+  OutOps.push_back(Op);
+  return false;
 };
 
 /// createAccaISelDag - This pass converts a legalized DAG into a

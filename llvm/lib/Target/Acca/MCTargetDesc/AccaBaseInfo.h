@@ -33,6 +33,7 @@ enum {
   MO_REL64_D1,
   MO_REL64_D2,
   MO_REL64_D3,
+  MO_REL22_BYTE,
   // TODO: Add more flags.
 };
 } // namespace AccaII

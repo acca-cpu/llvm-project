@@ -7,6 +7,7 @@ add_llvm_component_library(LLVMAccaDesc
   AccaELFObjectWriter.cpp
   AccaInstPrinter.cpp
   AccaMCExpr.cpp
+  AccaBaseInfo.cpp
 
   LINK_COMPONENTS
   MC

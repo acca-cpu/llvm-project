@@ -6,16 +6,21 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "AccaRegisterInfo.h"
+#include "MCTargetDesc/AccaBaseInfo.h"
 #include "MCTargetDesc/AccaInstPrinter.h"
 #include "MCTargetDesc/AccaMCExpr.h"
 #include "MCTargetDesc/AccaMCTargetDesc.h"
 #include "TargetInfo/AccaTargetInfo.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/MC/MCAsmMacro.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCParser/MCAsmLexer.h"
 #include "llvm/MC/MCParser/MCAsmParser.h"
+#include "llvm/MC/MCParser/MCParsedAsmOperand.h"
 #include "llvm/MC/MCParser/MCTargetAsmParser.h"
 #include "llvm/MC/MCRegister.h"
 #include "llvm/MC/MCStreamer.h"
@@ -24,6 +29,8 @@
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/MathExtras.h"
+#include <cstdint>
+#include <limits>
 
 using namespace llvm;
 
@@ -58,6 +65,9 @@ class AccaAsmParser : public MCTargetAsmParser {
                                bool MatchingInlineAsm) override;
 
   unsigned checkTargetMatchPredicate(MCInst &Inst) override;
+
+  unsigned validateTargetOperandClass(MCParsedAsmOperand &Op,
+                                              unsigned Kind) override;
 
   bool generateImmOutOfRangeError(OperandVector &Operands, uint64_t ErrorInfo,
                       int64_t Lower, int64_t Upper,
@@ -165,6 +175,10 @@ public:
     assert(Kind == KindTy::Token && "Invalid type access!");
     return Tok;
   }
+
+  void setToken(StringRef Token) {
+    Tok = Token;
+  };
 
   void print(raw_ostream &OS) const override {
     auto RegName = [](MCRegister Reg) {
@@ -406,6 +420,13 @@ parseRegister(OperandVector &Operands) {
   return MatchOperand_Success;
 }
 
+static uint32_t parseMachineRegister(StringRef Name) {
+  const auto* MReg = AccaSysReg::lookupSysRegByName(Name);
+  if (MReg)
+    return MReg->Encoding;
+  return std::numeric_limits<uint32_t>::max();
+};
+
 OperandMatchResultTy AccaAsmParser::
 parseImmediate(OperandVector &Operands) {
   SMLoc S = getLoc();
@@ -424,6 +445,20 @@ parseImmediate(OperandVector &Operands) {
   case AsmToken::Integer:
   case AsmToken::String:
   case AsmToken::Identifier:
+    // check if this is a machine register ID
+    if (getLexer().getKind() == AsmToken::Identifier) {
+      if (getLexer().getTok().getIdentifier().starts_with("mreg.")) {
+        // consume the token
+        auto Tok = getLexer().getTok();
+        getLexer().Lex();
+        auto MReg = parseMachineRegister(Tok.getIdentifier().substr(5));
+        if (MReg == std::numeric_limits<uint32_t>::max())
+          return MatchOperand_ParseFail;
+        Res = MCConstantExpr::create(MReg, getContext());
+        E = getLexer().getLoc();
+        break;
+      }
+    }
     if (getParser().parseExpression(Res, E))
       return MatchOperand_ParseFail;
     break;
@@ -535,28 +570,32 @@ ParseInstruction(ParseInstructionInfo &Info, StringRef Name, SMLoc NameLoc,
                  OperandVector &Operands) {
   size_t Start = 0, Next = Name.find('.');
   StringRef Head = Name.slice(Start, Next);
+  StringRef Mnemonic = Head;
 
-  bool AcceptsCondCode = StringSwitch<bool>(Head)
+  bool AcceptsCondCode = StringSwitch<bool>(Mnemonic)
     .Cases("soc", "sof", "jmpa", "jmpr", "cjmpa", "cjmpr", "calla", "callr",
       true)
     .Default(false);
-  bool RequiresCondCode = StringSwitch<bool>(Head)
+  bool RequiresCondCode = StringSwitch<bool>(Mnemonic)
     .Cases("soc", "sof", "cjmpa", "cjmpr", true)
     .Default(false);
-  bool AcceptsSize = StringSwitch<bool>(Head)
+  bool AcceptsSize = StringSwitch<bool>(Mnemonic)
     .Cases("pushs", "pushp", "pops", "popp", "lds", "ldp", "sts", "stp", true)
     .Cases("copy", "add", "sub", "div", "and", "or", "xor", "shl", "shr", true)
     .Cases("rot", "neg", "bswap", "soc", "sof", "cjmpa", "cjmpr", true)
     .Default(false);
+  size_t IgnoreRegSizeIndex = StringSwitch<size_t>(Mnemonic)
+    .Cases("cjmpa", "cjmpr", "sts", "stp", 0)
+    .Case("lds", 1)
+    .Case("ldp", 2)
+    .Default(std::numeric_limits<size_t>::max());
 
   // First operand in MCInst is instruction mnemonic.
-  Operands.push_back(AccaOperand::createToken(Head, NameLoc));
+  Operands.push_back(AccaOperand::createToken(Mnemonic, NameLoc));
 
   // handle condition codes
-  if (RequiresCondCode && Next == StringRef::npos) {
-    std::string Msg = "missing condition code";
-    return Error(NameLoc, Msg);
-  }
+  if (RequiresCondCode && Next == StringRef::npos)
+    return Error(NameLoc, "missing condition code");
   if (AcceptsCondCode && Next != StringRef::npos) {
     Start = Next;
     Next = Name.find('.', Start + 1);
@@ -564,13 +603,57 @@ ParseInstruction(ParseInstructionInfo &Info, StringRef Name, SMLoc NameLoc,
 
     SMLoc SuffixLoc = SMLoc::getFromPointer(NameLoc.getPointer() +
                                             (Head.data() - Name.data()));
-    uint8_t CondCode = 15;
-    if (CondCode == 15) {
-      std::string Msg = "invalid condition code";
-      return Error(SuffixLoc, Msg);
-    }
+    uint8_t CondCode = StringSwitch<uint8_t>(Head)
+      .Case("c",  0)
+      .Case("nc", 1)
+      .Case("z",  2)
+      .Case("nz", 3)
+      .Case("o",  4)
+      .Case("no", 5)
+      .Case("s",  6)
+      .Case("ns", 7)
+      .Case("l",  8)
+      .Case("nl", 9)
+      .Default(15);
+    if (CondCode == 15)
+      return Error(SuffixLoc, "invalid condition code");
     Operands.push_back(AccaOperand::createToken(".", SuffixLoc));
     Operands.push_back(AccaOperand::createImm(MCConstantExpr::create(CondCode, getContext()), NameLoc, NameLoc));
+  }
+
+  size_t FakeSizeSuffixIdx = std::numeric_limits<size_t>::max();
+
+  if (AcceptsSize) {
+    if (Next != StringRef::npos) {
+      Start = Next;
+      Next = Name.find('.', Start + 1);
+      Head = Name.slice(Start + 1, Next);
+
+      SMLoc SuffixLoc = SMLoc::getFromPointer(NameLoc.getPointer() +
+                                              (Head.data() - Name.data()));
+      bool Ok = Head.size() == 1;
+      if (Ok) {
+        switch (Head[0]) {
+          case 'b':
+          case 'd':
+          case 'q':
+          case 'w':
+            break;
+          default:
+            Ok = false;
+        }
+      }
+      if (!Ok) {
+        std::string Msg = "invalid size";
+        return Error(SuffixLoc, Msg);
+      }
+      // we *include* the dot in the token
+      Operands.push_back(AccaOperand::createToken(Name.slice(Start, Next), SuffixLoc));
+    } else {
+      // reserve space for the size suffix that we have to try to detect ourselves
+      FakeSizeSuffixIdx = Operands.size();
+      Operands.push_back(AccaOperand::createToken("", NameLoc));
+    }
   }
 
   // If there are no more operands, then finish.
@@ -578,13 +661,74 @@ ParseInstruction(ParseInstructionInfo &Info, StringRef Name, SMLoc NameLoc,
     return false;
 
   // Parse first operand.
-  if (parseOperand(Operands, Name))
+  if (parseOperand(Operands, Mnemonic))
     return true;
 
   // Parse until end of statement, consuming commas between operands.
   while (parseOptionalToken(AsmToken::Comma))
-    if (parseOperand(Operands, Name))
+    if (parseOperand(Operands, Mnemonic))
       return true;
+
+  if (AcceptsSize && FakeSizeSuffixIdx != std::numeric_limits<size_t>::max()) {
+    // we have to try to determine the size from the operands
+    size_t OperandIndex = 0;
+    uint8_t CurrentSize = 4;
+    SMLoc SizeLoc;
+    for (const auto& Operand: Operands) {
+      if (Operand->isToken())
+        // don't increment the operand index for tokens
+        continue;
+
+      size_t CurrOpIdx = OperandIndex++;
+      if (CurrOpIdx == IgnoreRegSizeIndex)
+        continue;
+
+      if (!Operand->isReg())
+        continue;
+
+      uint8_t NewSize = 4;
+
+      if (AccaMCRegisterClasses[Acca::I8RegsRegClassID].contains(Operand->getReg()))
+        NewSize = 0;
+      else if (AccaMCRegisterClasses[Acca::I16RegsRegClassID].contains(Operand->getReg()))
+        NewSize = 1;
+      else if (AccaMCRegisterClasses[Acca::I32RegsRegClassID].contains(Operand->getReg()))
+        NewSize = 2;
+      else if (AccaMCRegisterClasses[Acca::I64RegsRegClassID].contains(Operand->getReg()))
+        NewSize = 3;
+      else
+        llvm_unreachable("invalid register");
+
+      if (CurrentSize == 4) {
+        CurrentSize = NewSize;
+        SizeLoc = Operand->getStartLoc();
+      } else if (CurrentSize != NewSize) {
+        Error(Operand->getStartLoc(), "mismatched register width");
+        Note(SizeLoc, "while inferring operation width, found register defining operation width here");
+        return true;
+      }
+    }
+    if (CurrentSize == 4)
+      return Error(NameLoc, "unable to infer operation width");
+    const char* Suffix = nullptr;
+    switch (CurrentSize) {
+      case 0:
+        Suffix = ".b";
+        break;
+      case 1:
+        Suffix = ".d";
+        break;
+      case 2:
+        Suffix = ".q";
+        break;
+      case 3:
+        Suffix = ".w";
+        break;
+      default:
+        llvm_unreachable("impossible");
+    }
+    static_cast<AccaOperand&>(*Operands[FakeSizeSuffixIdx].get()).setToken(Suffix);
+  }
 
   // Parse end of statement and return successfully.
   if (parseOptionalToken(AsmToken::EndOfStatement))
@@ -720,6 +864,38 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   }
   llvm_unreachable("Unknown match type detected!");
 }
+
+unsigned AccaAsmParser::
+validateTargetOperandClass(MCParsedAsmOperand &GenericOp, unsigned Kind) {
+  AccaOperand& Op = static_cast<AccaOperand&>(GenericOp);
+  int64_t ExpectedVal;
+
+  switch (Kind) {
+  default:
+    return Match_InvalidOperand;
+  case MCK_0:
+    ExpectedVal = 0;
+    break;
+  case MCK_1:
+    ExpectedVal = 1;
+    break;
+  case MCK_3:
+    ExpectedVal = 3;
+    break;
+  }
+
+  if (!Op.isImm())
+    return Match_InvalidOperand;
+
+  const MCConstantExpr* Expr = dyn_cast<MCConstantExpr>(Op.getImm());
+  if (!Expr)
+    return Match_InvalidOperand;
+
+  if (Expr->getValue() == ExpectedVal)
+    return Match_Success;
+
+  return Match_InvalidOperand;
+};
 
 extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeAccaAsmParser() {
   RegisterMCAsmParser<AccaAsmParser> Parser(getTheAccaTarget());

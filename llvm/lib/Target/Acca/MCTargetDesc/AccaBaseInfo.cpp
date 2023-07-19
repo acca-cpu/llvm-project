@@ -9,7 +9,7 @@
 // This file provides basic encoding and assembly information for Acca.
 //
 //===----------------------------------------------------------------------===//
-#include "AccaBaseInfo.h"
+#include "MCTargetDesc/AccaBaseInfo.h"
 #include "MCTargetDesc/AccaMCTargetDesc.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Support/MathExtras.h"

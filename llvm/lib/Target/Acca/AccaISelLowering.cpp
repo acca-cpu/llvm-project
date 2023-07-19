@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "AccaBaseInfo.h"
+#include "MCTargetDesc/AccaBaseInfo.h"
 #include "AccaCallingConvention.h"
 #include "AccaISelLowering.h"
 //#include "MCTargetDesc/AccaMCExpr.h"
@@ -130,6 +130,13 @@ AccaTargetLowering::AccaTargetLowering(const TargetMachine &TM, const AccaSubtar
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
   //setOperationAction(ISD::BRCOND, MVT::i32, Custom);
 
+  setOperationAction({
+    ISD::GlobalAddress,
+    ISD::BlockAddress,
+    ISD::ConstantPool,
+    ISD::JumpTable,
+  }, MVT::i64, Custom);
+
   // Acca does not currently support atomics
   setMaxAtomicSizeInBitsSupported(0);
 
@@ -159,6 +166,14 @@ bool AccaTargetLowering::useSoftFloat() const {
 SDValue AccaTargetLowering::
 LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   switch (Op.getOpcode()) {
+    case ISD::GlobalAddress:
+      return lowerGlobalAddress(Op, DAG);
+    case ISD::BlockAddress:
+      return lowerBlockAddress(Op, DAG);
+    case ISD::ConstantPool:
+      return lowerConstantPool(Op, DAG);
+    case ISD::JumpTable:
+      return lowerJumpTable(Op, DAG);
     default:
       llvm_unreachable("Invalid/unreachable custom lowering operation");
   }
@@ -255,6 +270,12 @@ static SDValue convertValVTToLocVT(SelectionDAG &DAG, SDValue Val,
   case CCValAssign::BCvt:
     Val = DAG.getNode(ISD::BITCAST, DL, LocVT, Val);
     break;
+  case CCValAssign::SExt:
+    Val = DAG.getNode(ISD::SIGN_EXTEND, DL, LocVT, Val);
+    break;
+  case CCValAssign::ZExt:
+    Val = DAG.getNode(ISD::ZERO_EXTEND, DL, LocVT, Val);
+    break;
   }
   return Val;
 }
@@ -264,6 +285,8 @@ static SDValue convertValVTToLocVT(SelectionDAG &DAG, SDValue Val,
 static SDValue convertLocVTToValVT(SelectionDAG &DAG, SDValue Val,
                                    const CCValAssign &VA, const SDLoc &DL,
                                    const AccaSubtarget &Subtarget) {
+  EVT ValVT = VA.getValVT();
+
   switch (VA.getLocInfo()) {
   default:
     llvm_unreachable("Unexpected CCValAssign::LocInfo");
@@ -272,13 +295,15 @@ static SDValue convertLocVTToValVT(SelectionDAG &DAG, SDValue Val,
       llvm_unreachable("Acca doesn't support vectors");
     break;
   case CCValAssign::AExt:
-    Val = DAG.getNode(ISD::TRUNCATE, DL, VA.getValVT(), Val);
+  case CCValAssign::SExt:
+  case CCValAssign::ZExt:
+    Val = DAG.getNode(ISD::TRUNCATE, DL, ValVT, Val);
     break;
   case CCValAssign::Trunc:
-    Val = DAG.getNode(ISD::ANY_EXTEND, DL, VA.getValVT(), Val);
+    Val = DAG.getNode(ISD::ANY_EXTEND, DL, ValVT, Val);
     break;
   case CCValAssign::BCvt:
-    Val = DAG.getNode(ISD::BITCAST, DL, VA.getValVT(), Val);
+    Val = DAG.getNode(ISD::BITCAST, DL, ValVT, Val);
     break;
   }
   return Val;
@@ -572,6 +597,63 @@ LowerReturn(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
 
   return DAG.getNode(AccaISD::RET_FLAG, DL, MVT::Other, RetOps);
 };
+
+static SDValue getTargetNode(GlobalAddressSDNode *N, SDLoc DL, EVT Ty,
+                             SelectionDAG &DAG, unsigned Flags) {
+  return DAG.getTargetGlobalAddress(N->getGlobal(), DL, Ty, 0, Flags);
+}
+
+static SDValue getTargetNode(BlockAddressSDNode *N, SDLoc DL, EVT Ty,
+                             SelectionDAG &DAG, unsigned Flags) {
+  return DAG.getTargetBlockAddress(N->getBlockAddress(), Ty, N->getOffset(),
+                                   Flags);
+}
+
+static SDValue getTargetNode(ConstantPoolSDNode *N, SDLoc DL, EVT Ty,
+                             SelectionDAG &DAG, unsigned Flags) {
+  return DAG.getTargetConstantPool(N->getConstVal(), Ty, N->getAlign(),
+                                   N->getOffset(), Flags);
+}
+
+static SDValue getTargetNode(JumpTableSDNode *N, SDLoc DL, EVT Ty,
+                             SelectionDAG &DAG, unsigned Flags) {
+  return DAG.getTargetJumpTable(N->getIndex(), Ty, Flags);
+}
+
+template <class NodeTy>
+SDValue AccaTargetLowering::getAddr(NodeTy *N, SelectionDAG &DAG,
+                                         bool IsLocal) const {
+  SDLoc DL(N);
+  EVT Ty = getPointerTy(DAG.getDataLayout());
+  SDValue Addr = getTargetNode(N, DL, Ty, DAG, AccaII::MO_REL22_BYTE);
+
+  if (!IsLocal)
+    llvm_unreachable("unimplemented");
+
+  return SDValue(DAG.getMachineNode(Acca::LDR, DL, Ty, Addr), 0);
+}
+
+SDValue AccaTargetLowering::lowerBlockAddress(SDValue Op,
+                                                   SelectionDAG &DAG) const {
+  return getAddr(cast<BlockAddressSDNode>(Op), DAG);
+}
+
+SDValue AccaTargetLowering::lowerJumpTable(SDValue Op,
+                                                SelectionDAG &DAG) const {
+  return getAddr(cast<JumpTableSDNode>(Op), DAG);
+}
+
+SDValue AccaTargetLowering::lowerConstantPool(SDValue Op,
+                                                   SelectionDAG &DAG) const {
+  return getAddr(cast<ConstantPoolSDNode>(Op), DAG);
+}
+
+SDValue AccaTargetLowering::lowerGlobalAddress(SDValue Op,
+                                                    SelectionDAG &DAG) const {
+  GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
+  assert(N->getOffset() == 0 && "unexpected offset in global node");
+  return getAddr(N, DAG, N->getGlobal()->isDSOLocal());
+}
 
 #define GET_REGISTER_MATCHER
 #include "AccaGenAsmMatcher.inc"

@@ -29,6 +29,7 @@ public:
     VK_REL64_D1,
     VK_REL64_D2,
     VK_REL64_D3,
+    VK_REL22_BYTE,
     VK_INVALID = 0xfff,
   };
 private:

@@ -36,6 +36,7 @@ StringRef AccaMCExpr::getVariantKindName() const {
   case VK_REL64_D1: return "rel64_d1";
   case VK_REL64_D2: return "rel64_d2";
   case VK_REL64_D3: return "rel64_d3";
+  case VK_REL22_BYTE: return "rel22_byte";
   default:
     llvm_unreachable("Invalid ELF symbol kind");
   }
@@ -48,6 +49,7 @@ AccaMCExpr::VariantKind AccaMCExpr::getVariantKindForName(StringRef name) {
     .Case("rel64_d1", VK_REL64_D1)
     .Case("rel64_d2", VK_REL64_D2)
     .Case("rel64_d3", VK_REL64_D3)
+    .Case("rel22_byte", VK_REL22_BYTE)
     .Default(VK_INVALID);
 };
 

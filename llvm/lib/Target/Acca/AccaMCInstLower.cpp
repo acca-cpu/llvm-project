@@ -12,7 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "AccaMCInstLower.h"
-#include "AccaBaseInfo.h"
+#include "MCTargetDesc/AccaBaseInfo.h"
 #include "MCTargetDesc/AccaMCExpr.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
@@ -73,6 +73,9 @@ MCOperand AccaMCInstLower::lowerSymbolOperandELF(const MachineOperand &MO,
     break;
   case AccaII::MO_REL64_D3:
     Kind = AccaMCExpr::VK_REL64_D3;
+    break;
+  case AccaII::MO_REL22_BYTE:
+    Kind = AccaMCExpr::VK_REL22_BYTE;
     break;
     // TODO: Handle more target-flags.
   }

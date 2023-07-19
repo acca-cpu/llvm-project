@@ -239,7 +239,7 @@ foreach setflags = 0-1 in {
     def NOT_#opsize#_#setflagsstr :
       Pseudo<(outs regclass:$Rd), (ins regclass:$Ra),
              [(set regclass:$Rd, (not regclass:$Ra))],
-             !strconcat("not{.", sizechar, "} $Rd, $Ra, ",
+             !strconcat("not.", sizechar, " $Rd, $Ra, ",
                !if(setflags, "1", "0"))>,
       PseudoInstExpansion<(xor_op regclass:$Rd, regclass:$Ra, xor_val, 0)>;
   }
@@ -335,7 +335,7 @@ foreach size = 0-3 in {
     def SOC_#opsize#_#borrowstr : AccaInst<
       (outs regclass:$Rd),
       (ins regclass:$lhs, regclass:$rhs, ccode:$cond),
-      !strconcat("soc.$cond{.", sizechar, "} $Rd, $lhs, $rhs, ", !if(borrow, "1", "0")),
+      !strconcat("soc.$cond.", sizechar, " $Rd, $lhs, $rhs, ", !if(borrow, "1", "0")),
       []
     > {
       bits<4> Rd;
@@ -373,7 +373,7 @@ foreach size = 0-3 in {
   def SOF_#opsize : AccaInst<
     (outs regclass:$Rd),
     (ins ccode:$cond),
-    !strconcat("soc.$cond{.", sizechar, "} $Rd"),
+    !strconcat("soc.$cond.", sizechar, " $Rd"),
     []
   > {
     bits<4> Rd;

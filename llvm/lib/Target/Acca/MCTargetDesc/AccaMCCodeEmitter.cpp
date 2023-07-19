@@ -137,6 +137,8 @@ AccaMCCodeEmitter::getExprOpValue(const MCInst &MI, const MCOperand &MO,
     case AccaMCExpr::VK_REL64_D3:
       FixupKind = Acca::fixup_acca_rel64_d3;
       break;
+    case AccaMCExpr::VK_REL22_BYTE:
+      FixupKind = Acca::fixup_acca_rel22_byte;
     }
   } else if (Kind == MCExpr::SymbolRef &&
              cast<MCSymbolRefExpr>(Expr)->getKind() ==

@@ -64,7 +64,13 @@ namespace llvm {
                                  StringRef Constraint, MVT VT) const override;
 
   private:
-    SDValue LowerZERO_EXTEND(SDValue Op, SelectionDAG &DAG) const;
+    template <class NodeTy>
+    SDValue getAddr(NodeTy *N, SelectionDAG &DAG, bool IsLocal = true) const;
+
+    SDValue lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
+    SDValue lowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
+    SDValue lowerJumpTable(SDValue Op, SelectionDAG &DAG) const;
+    SDValue lowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
   };
 }
 

@@ -212,10 +212,10 @@ multiclass BasePushPop1<bits<6> op, string asmname, bit isPop, bits<2> size, Reg
 }
 
 multiclass PushPop1<bits<6> op, string asmname, bit isStore> {
-  defm _byte       : BasePushPop1<op, !strconcat(asmname, "{.b}"), isStore, 0b00, I8Regs>;
-  defm _doublebyte : BasePushPop1<op, !strconcat(asmname, "{.d}"), isStore, 0b01, I16Regs>;
-  defm _quadbyte   : BasePushPop1<op, !strconcat(asmname, "{.q}"), isStore, 0b10, I32Regs>;
-  defm _word       : BasePushPop1<op, !strconcat(asmname, "{.w}"), isStore, 0b11, I64Regs>;
+  defm _byte       : BasePushPop1<op, !strconcat(asmname, ".b"), isStore, 0b00, I8Regs>;
+  defm _doublebyte : BasePushPop1<op, !strconcat(asmname, ".d"), isStore, 0b01, I16Regs>;
+  defm _quadbyte   : BasePushPop1<op, !strconcat(asmname, ".q"), isStore, 0b10, I32Regs>;
+  defm _word       : BasePushPop1<op, !strconcat(asmname, ".w"), isStore, 0b11, I64Regs>;
 }
 
 multiclass BasePushPop2<bits<6> op, string asmname, bit isPop, bits<2> size, RegisterClass regtype> {
@@ -308,10 +308,10 @@ multiclass BasePushPop2<bits<6> op, string asmname, bit isPop, bits<2> size, Reg
 }
 
 multiclass PushPop2<bits<6> op, string asmname, bit isStore> {
-  defm _byte       : BasePushPop2<op, !strconcat(asmname, "{.b}"), isStore, 0b00, I8Regs>;
-  defm _doublebyte : BasePushPop2<op, !strconcat(asmname, "{.d}"), isStore, 0b01, I16Regs>;
-  defm _quadbyte   : BasePushPop2<op, !strconcat(asmname, "{.q}"), isStore, 0b10, I32Regs>;
-  defm _word       : BasePushPop2<op, !strconcat(asmname, "{.w}"), isStore, 0b11, I64Regs>;
+  defm _byte       : BasePushPop2<op, !strconcat(asmname, ".b"), isStore, 0b00, I8Regs>;
+  defm _doublebyte : BasePushPop2<op, !strconcat(asmname, ".d"), isStore, 0b01, I16Regs>;
+  defm _quadbyte   : BasePushPop2<op, !strconcat(asmname, ".q"), isStore, 0b10, I32Regs>;
+  defm _word       : BasePushPop2<op, !strconcat(asmname, ".w"), isStore, 0b11, I64Regs>;
 }
 
 class BaseLoadStore1<bits<6> op, string asmname, bit isStore, bits<2> size, RegisterClass regtype, ValueType valtype> : AccaInst<
@@ -337,10 +337,10 @@ class BaseLoadStore1<bits<6> op, string asmname, bit isStore, bits<2> size, Regi
 }
 
 multiclass LoadStore1<bits<6> op, string asmname, bit isStore> {
-  def _byte       : BaseLoadStore1<op, !strconcat(asmname, "{.b}"), isStore, 0b00, I8Regs,  i8>;
-  def _doublebyte : BaseLoadStore1<op, !strconcat(asmname, "{.d}"), isStore, 0b01, I16Regs, i16>;
-  def _quadbyte   : BaseLoadStore1<op, !strconcat(asmname, "{.q}"), isStore, 0b10, I32Regs, i32>;
-  def _word       : BaseLoadStore1<op, !strconcat(asmname, "{.w}"), isStore, 0b11, I64Regs, i64>;
+  def _byte       : BaseLoadStore1<op, !strconcat(asmname, ".b"), isStore, 0b00, I8Regs,  i8>;
+  def _doublebyte : BaseLoadStore1<op, !strconcat(asmname, ".d"), isStore, 0b01, I16Regs, i16>;
+  def _quadbyte   : BaseLoadStore1<op, !strconcat(asmname, ".q"), isStore, 0b10, I32Regs, i32>;
+  def _word       : BaseLoadStore1<op, !strconcat(asmname, ".w"), isStore, 0b11, I64Regs, i64>;
 }
 
 class BaseLoadStore2<bits<6> op, string asmname, bit isStore, bits<2> size, RegisterClass regtype> : AccaInst<
@@ -365,16 +365,16 @@ class BaseLoadStore2<bits<6> op, string asmname, bit isStore, bits<2> size, Regi
 }
 
 multiclass LoadStore2<bits<6> op, string asmname, bit isStore> {
-  def _byte       : BaseLoadStore2<op, !strconcat(asmname, "{.b}"), isStore, 0b00, I8Regs>;
-  def _doublebyte : BaseLoadStore2<op, !strconcat(asmname, "{.d}"), isStore, 0b01, I16Regs>;
-  def _quadbyte   : BaseLoadStore2<op, !strconcat(asmname, "{.q}"), isStore, 0b10, I32Regs>;
-  def _word       : BaseLoadStore2<op, !strconcat(asmname, "{.w}"), isStore, 0b11, I64Regs>;
+  def _byte       : BaseLoadStore2<op, !strconcat(asmname, ".b"), isStore, 0b00, I8Regs>;
+  def _doublebyte : BaseLoadStore2<op, !strconcat(asmname, ".d"), isStore, 0b01, I16Regs>;
+  def _quadbyte   : BaseLoadStore2<op, !strconcat(asmname, ".q"), isStore, 0b10, I32Regs>;
+  def _word       : BaseLoadStore2<op, !strconcat(asmname, ".w"), isStore, 0b11, I64Regs>;
 }
 
 class Copy<bits<2> size, RegisterClass regtype, ValueType valtype, string asmsuffix> : AccaInst<
   (outs regtype:$Rd),
   (ins regtype:$Rs),
-  !strconcat("copy{.", asmsuffix, "} $Rd, $Rs"),
+  !strconcat("copy.", asmsuffix, " $Rd, $Rs"),
   [/*(set regtype:$Rd, regtype:$Rs)*/]
 > {
   bits<4> Rd;
@@ -531,10 +531,10 @@ multiclass BaseAddSub<bits<6> regop, bits<4> immop, bits<2> size, RegisterClass 
 }
 
 multiclass AddSub<bits<6> regop, bits<4> immop, string asmname, SDPatternOperator opnode> {
-  defm _byte       : BaseAddSub<regop, immop, 0b00, I8Regs,  i8,  opnode, !strconcat(asmname, "{.b}")>;
-  defm _doublebyte : BaseAddSub<regop, immop, 0b01, I16Regs, i16, opnode, !strconcat(asmname, "{.d}")>;
-  defm _quadbyte   : BaseAddSub<regop, immop, 0b10, I32Regs, i32, opnode, !strconcat(asmname, "{.q}")>;
-  defm _word       : BaseAddSub<regop, immop, 0b11, I64Regs, i64, opnode, !strconcat(asmname, "{.w}")>;
+  defm _byte       : BaseAddSub<regop, immop, 0b00, I8Regs,  i8,  opnode, !strconcat(asmname, ".b")>;
+  defm _doublebyte : BaseAddSub<regop, immop, 0b01, I16Regs, i16, opnode, !strconcat(asmname, ".d")>;
+  defm _quadbyte   : BaseAddSub<regop, immop, 0b10, I32Regs, i32, opnode, !strconcat(asmname, ".q")>;
+  defm _word       : BaseAddSub<regop, immop, 0b11, I64Regs, i64, opnode, !strconcat(asmname, ".w")>;
 }
 
 class Mul<bits<2> srcsize, bits<2> dstsize, RegisterClass srctype, RegisterClass dsttype, list<dag> pattern, bit setflags, bit issigned> : AccaInst<
@@ -573,7 +573,7 @@ multiclass Div<bits<2> size, RegisterClass regtype, ValueType valtype, string as
       def _#setflagsstr#_#issignedstr : AccaInst<
         (outs regtype:$Rd, regtype: $Rr),
         (ins regtype:$lhs, regtype:$rhs),
-        !strconcat("div{.", asmsuffix, "} $Rd, $Rr, $lhs, $rhs, ", !if(issigned, "1", "0"), ", ", !if(setflags, "1", "0")),
+        !strconcat("div.", asmsuffix, " $Rd, $Rr, $lhs, $rhs, ", !if(issigned, "1", "0"), ", ", !if(setflags, "1", "0")),
         []
       > {
         bits<4> Rd;
@@ -730,10 +730,10 @@ multiclass BaseAndOrXor<bits<6> regop, bits<5> immop, string asmname, bits<2> si
 }
 
 multiclass AndOrXor<bits<6> regop, bits<5> immop, string asmname, SDPatternOperator opnode> {
-  defm _byte       : BaseAndOrXor<regop, immop, !strconcat(asmname, "{.b}"), 0b00, I8Regs,  i8,  opnode>;
-  defm _doublebyte : BaseAndOrXor<regop, immop, !strconcat(asmname, "{.d}"), 0b01, I16Regs, i16, opnode>;
-  defm _quadbyte   : BaseAndOrXor<regop, immop, !strconcat(asmname, "{.q}"), 0b10, I32Regs, i32, opnode>;
-  defm _word       : BaseAndOrXor<regop, immop, !strconcat(asmname, "{.w}"), 0b11, I64Regs, i64, opnode>;
+  defm _byte       : BaseAndOrXor<regop, immop, !strconcat(asmname, ".b"), 0b00, I8Regs,  i8,  opnode>;
+  defm _doublebyte : BaseAndOrXor<regop, immop, !strconcat(asmname, ".d"), 0b01, I16Regs, i16, opnode>;
+  defm _quadbyte   : BaseAndOrXor<regop, immop, !strconcat(asmname, ".q"), 0b10, I32Regs, i32, opnode>;
+  defm _word       : BaseAndOrXor<regop, immop, !strconcat(asmname, ".w"), 0b11, I64Regs, i64, opnode>;
 }
 
 multiclass BaseShlShrRot<bits<6> regop, bits<6> immop, string asmname, bit arithflag, bits<2> size, RegisterClass regtype, ValueType valtype, SDPatternOperator opnode> {
@@ -876,10 +876,10 @@ multiclass BaseShlShrRot<bits<6> regop, bits<6> immop, string asmname, bit arith
 }
 
 multiclass ShlShrRot<bits<6> regop, bits<6> immop, string asmname, bit arithflag, SDPatternOperator opnode> {
-  defm _byte       : BaseShlShrRot<regop, immop, !strconcat(asmname, "{.b}"), arithflag, 0b00, I8Regs,  i8,  opnode>;
-  defm _doublebyte : BaseShlShrRot<regop, immop, !strconcat(asmname, "{.d}"), arithflag, 0b01, I16Regs, i16, opnode>;
-  defm _quadbyte   : BaseShlShrRot<regop, immop, !strconcat(asmname, "{.q}"), arithflag, 0b10, I32Regs, i32, opnode>;
-  defm _word       : BaseShlShrRot<regop, immop, !strconcat(asmname, "{.w}"), arithflag, 0b11, I64Regs, i64, opnode>;
+  defm _byte       : BaseShlShrRot<regop, immop, !strconcat(asmname, ".b"), arithflag, 0b00, I8Regs,  i8,  opnode>;
+  defm _doublebyte : BaseShlShrRot<regop, immop, !strconcat(asmname, ".d"), arithflag, 0b01, I16Regs, i16, opnode>;
+  defm _quadbyte   : BaseShlShrRot<regop, immop, !strconcat(asmname, ".q"), arithflag, 0b10, I32Regs, i32, opnode>;
+  defm _word       : BaseShlShrRot<regop, immop, !strconcat(asmname, ".w"), arithflag, 0b11, I64Regs, i64, opnode>;
 }
 
 class BaseNegBswap<bits<6> op, string asmname, bits<2> size, RegisterClass regtype, ValueType valtype, SDPatternOperator opnode, bit setflags> : AccaInst<
@@ -908,10 +908,10 @@ multiclass NegBswap<bits<6> op, string asmname, SDPatternOperator opnode> {
   foreach setflags = 0-1 in {
     defvar setflagsstr = !if(setflags, "setflags", "nosetflags");
 
-    def _byte_#setflagsstr       : BaseNegBswap<op, !strconcat(asmname, "{.b}"), 0b00, I8Regs,  i8,  opnode, setflags>;
-    def _doublebyte_#setflagsstr : BaseNegBswap<op, !strconcat(asmname, "{.d}"), 0b01, I16Regs, i16, opnode, setflags>;
-    def _quadbyte_#setflagsstr   : BaseNegBswap<op, !strconcat(asmname, "{.q}"), 0b10, I32Regs, i32, opnode, setflags>;
-    def _word_#setflagsstr       : BaseNegBswap<op, !strconcat(asmname, "{.w}"), 0b11, I64Regs, i64, opnode, setflags>;
+    def _byte_#setflagsstr       : BaseNegBswap<op, !strconcat(asmname, ".b"), 0b00, I8Regs,  i8,  opnode, setflags>;
+    def _doublebyte_#setflagsstr : BaseNegBswap<op, !strconcat(asmname, ".d"), 0b01, I16Regs, i16, opnode, setflags>;
+    def _quadbyte_#setflagsstr   : BaseNegBswap<op, !strconcat(asmname, ".q"), 0b10, I32Regs, i32, opnode, setflags>;
+    def _word_#setflagsstr       : BaseNegBswap<op, !strconcat(asmname, ".w"), 0b11, I64Regs, i64, opnode, setflags>;
   }
 }
 

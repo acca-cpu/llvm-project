@@ -10,7 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "AccaBaseInfo.h"
+#include "MCTargetDesc/AccaBaseInfo.h"
 #include "MCTargetDesc/AccaMCTargetDesc.h"
 #include "TargetInfo/AccaTargetInfo.h"
 #include "llvm/MC/MCContext.h"

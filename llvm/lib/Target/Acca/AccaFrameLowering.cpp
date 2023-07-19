@@ -11,7 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "AccaFrameLowering.h"
-#include "AccaBaseInfo.h"
+#include "MCTargetDesc/AccaBaseInfo.h"
 #include "AccaInstrInfo.h"
 #include "AccaMachineFunctionInfo.h"
 #include "AccaRegisterInfo.h"

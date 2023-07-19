@@ -28,7 +28,6 @@ add_llvm_target(AccaCodeGen
   AccaTargetMachine.cpp
   AccaMCInstLower.cpp
   AccaTargetObjectFile.cpp
-  AccaBaseInfo.cpp
   AccaExpandPseudoInsts.cpp
 
   LINK_COMPONENTS

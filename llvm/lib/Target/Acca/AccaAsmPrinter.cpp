@@ -183,8 +183,14 @@ bool AccaAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
   if (ExtraCode)
     return true;
 
-  // TODO
-  return true;
+  const MachineOperand &AddrMO = MI->getOperand(OpNo);
+  // address must be in a register
+  if (!AddrMO.isReg())
+    return true;
+  // print the address register
+  OS << AccaInstPrinter::getRegisterName(AddrMO.getReg());
+
+  return false;
 }
 
 // Force static initialization.
