@@ -227,9 +227,6 @@ applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
            const MCValue &Target, MutableArrayRef<char> Data,
            uint64_t Value, bool IsResolved,
            const MCSubtargetInfo *STI) const {
-  if (!Value)
-    return; // Doesn't change encoding.
-
   MCFixupKind Kind = Fixup.getKind();
   if (Kind >= FirstLiteralRelocationKind)
     return;
