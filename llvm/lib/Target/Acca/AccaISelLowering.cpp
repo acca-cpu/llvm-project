@@ -19,6 +19,7 @@
 #include "AccaRegisterInfo.h"
 #include "AccaTargetMachine.h"
 #include "AccaTargetObjectFile.h"
+#include "MCTargetDesc/AccaMCTargetDesc.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/CodeGen/CallingConvLower.h"
@@ -624,13 +625,12 @@ template <class NodeTy>
 SDValue AccaTargetLowering::getAddr(NodeTy *N, SelectionDAG &DAG,
                                          bool IsLocal) const {
   SDLoc DL(N);
-  EVT Ty = getPointerTy(DAG.getDataLayout());
-  SDValue Addr = getTargetNode(N, DL, Ty, DAG, AccaII::MO_REL22_BYTE);
+  SDValue Addr = getTargetNode(N, DL, MVT::i64, DAG, AccaII::MO_REL22_BYTE);
 
   if (!IsLocal)
     llvm_unreachable("unimplemented");
 
-  return SDValue(DAG.getMachineNode(Acca::LDR, DL, Ty, Addr), 0);
+  return SDValue(DAG.getMachineNode(Acca::LDR, DL, MVT::i64, Addr), 0);
 }
 
 SDValue AccaTargetLowering::lowerBlockAddress(SDValue Op,
@@ -651,8 +651,24 @@ SDValue AccaTargetLowering::lowerConstantPool(SDValue Op,
 SDValue AccaTargetLowering::lowerGlobalAddress(SDValue Op,
                                                     SelectionDAG &DAG) const {
   GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
-  assert(N->getOffset() == 0 && "unexpected offset in global node");
-  return getAddr(N, DAG, N->getGlobal()->isDSOLocal());
+  SDValue Base = getAddr(N, DAG, N->getGlobal()->isDSOLocal());
+  if (N->getOffset() == 0)
+    return Base;
+
+  uint16_t Imm;
+  uint8_t ShiftFactor;
+
+  SDLoc DL(N);
+
+  if (AccaUtil::asSignedShiftedImm11(N->getOffset(), Imm, ShiftFactor)) {
+    SDValue ImmVal = DAG.getTargetConstant(Imm, DL, MVT::i16);
+    SDValue ShiftVal = DAG.getTargetConstant(ShiftFactor, DL, MVT::i4);
+    return SDValue(DAG.getMachineNode(Acca::ADD_word_nonnull_imm_nocarry_nosetflags_arith, DL, MVT::i64, Base, ImmVal, ShiftVal), 0);
+  }
+
+  SDValue Offset = DAG.getTargetConstant(N->getOffset(), DL, MVT::i64);
+  SDValue OffsetReg = SDValue(DAG.getMachineNode(Acca::PseudoLDI_word, DL, MVT::i64, Offset), 0);
+  return SDValue(DAG.getMachineNode(Acca::ADD_word_nonnull_reg_nocarry_nosetflags, DL, MVT::i64, Base, OffsetReg), 0);
 }
 
 #define GET_REGISTER_MATCHER
