@@ -987,7 +987,7 @@ multiclass JmpCall<bits<6> absop, bits<6> regrelop, bits<6> immrelop, string asm
 
     def _immrel_nocond : AccaInst<
       (outs),
-      (ins !if(isCall, simm22, simm22_br):$addr),
+      (ins !if(isCall, simm22_symbol, simm22_br):$addr),
       !strconcat(asmname, "r $addr"),
       []
     > {
@@ -1000,7 +1000,7 @@ multiclass JmpCall<bits<6> absop, bits<6> regrelop, bits<6> immrelop, string asm
 
     def _immrel_cond : AccaInst<
       (outs),
-      (ins ccode:$cond, !if(isCall, simm22, simm22_br):$addr),
+      (ins ccode:$cond, !if(isCall, simm22_symbol, simm22_br):$addr),
       !strconcat(asmname, "r.$cond $addr"),
       []
     > {
