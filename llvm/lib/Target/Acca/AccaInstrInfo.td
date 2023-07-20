@@ -261,7 +261,9 @@ foreach bigsize = 0-3 in {
     defvar smallvalsize = !cond(!eq(smallsize, 0) : i8, !eq(smallsize, 1) : i16, !eq(smallsize, 2) : i32, true : i64);
     defvar bigclass = !cond(!eq(bigsize, 0) : I8Regs, !eq(bigsize, 1) : I16Regs, !eq(bigsize, 2) : I32Regs, true : I64Regs);
     defvar smallclass = !cond(!eq(smallsize, 0) : I8Regs, !eq(smallsize, 1) : I16Regs, !eq(smallsize, 2) : I32Regs, true : I64Regs);
+    defvar bigbits = !cond(!eq(bigsize, 0) : 8, !eq(bigsize, 1) : 16, !eq(bigsize, 2) : 32, true : 64);
     defvar smallbits = !cond(!eq(smallsize, 0) : 8, !eq(smallsize, 1) : 16, !eq(smallsize, 2) : 32, true : 64);
+    defvar diffbits = !sub(bigbits, smallbits);
     defvar bigopsize = !cond(!eq(bigsize, 0) : "byte", !eq(bigsize, 1) : "doublebyte", !eq(bigsize, 2) : "quadbyte", true : "word");
     defvar smallopsize = !cond(!eq(smallsize, 0) : "byte", !eq(smallsize, 1) : "doublebyte", !eq(smallsize, 2) : "quadbyte", true : "word");
     defvar subreg_idx = !cast<SubRegIndex>(!strconcat("subreg_", smallopsize));
@@ -280,8 +282,8 @@ foreach bigsize = 0-3 in {
                     (bigvalsize (IMPLICIT_DEF)),
                     smallclass:$val,
                     subreg_idx),
-                  smallbits),
-                smallbits)>;
+                  diffbits),
+                diffbits)>;
     def : Pat<(bigvalsize (zext smallclass:$val)),
               (shrop_unsigned
                 (shlop
@@ -289,8 +291,8 @@ foreach bigsize = 0-3 in {
                     (bigvalsize (IMPLICIT_DEF)),
                     smallclass:$val,
                     subreg_idx),
-                  smallbits),
-                smallbits)>;
+                  diffbits),
+                diffbits)>;
 
     // single load sext/zext patterns
     def : Pat<(bigvalsize (sextloadpat I64Regs:$Raddr)),
@@ -300,8 +302,8 @@ foreach bigsize = 0-3 in {
                     (bigvalsize (IMPLICIT_DEF)),
                     (ldsop I64Regs:$Raddr),
                     subreg_idx),
-                  smallbits),
-                smallbits)>;
+                  diffbits),
+                diffbits)>;
     def : Pat<(bigvalsize (zextloadpat I64Regs:$Raddr)),
               (shrop_unsigned
                 (shlop
@@ -309,8 +311,8 @@ foreach bigsize = 0-3 in {
                     (bigvalsize (IMPLICIT_DEF)),
                     (ldsop I64Regs:$Raddr),
                     subreg_idx),
-                  smallbits),
-                smallbits)>;
+                  diffbits),
+                diffbits)>;
   }
 }
 
